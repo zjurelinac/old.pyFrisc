@@ -1,0 +1,126 @@
+####################################################################################################
+#                       FRISC Assembly language definition version 1.0                             #
+####################################################################################################
+
+general:
+    info:
+        name: 'FRISC Asm'
+        description: ''
+        version: '1.0'
+        author: 'zjurelinac'
+    architecture:
+        word_length: 8
+        line_length: 32
+        memory_size: 65536
+    assembler:
+        default_base: 16
+        module: 'frisc.asm.py'
+        pseudocommands:
+            - DW
+            - DH
+            - DB
+            - DS
+
+integers:
+    unsigned_19:
+        signed: false
+        width: 19
+    unsigned_32:
+        signed: false
+        width: 32
+    signed_20:
+        signed: true
+        width: 20
+    ri:
+        signed: false
+        width: 3
+
+replacements:
+    ALU_instr:
+        OR:     '00001'
+        AND:    '00010'
+        XOR:    '00011'
+        ADD:    '00100'
+        ADC:    '00101'
+        SUB:    '00110'
+        SBC:    '00111'
+        ROTL:   '01000'
+        ROTR:   '01001'
+        SHL:    '01010'
+        SHR:    '01011'
+        ASHR:   '01100'
+
+    MEM_instr:
+        LOADB:  '10010'
+        STOREB: '10011'
+        LOADH:  '10100'
+        STOREH: '10101'
+        LOAD:   '10110'
+        STORE:  '10111'
+
+    STACK_instr:
+        PUSH:   '10001'
+        POP:    '10000'
+
+    CTRL_instr:
+        JP:     '11000'
+        CALL:   '11001'
+
+    reg:
+        'R{ri}' : 0
+        SP    : '111'
+
+    # address_20:                   Investigate further
+    #     '{unsigned_19}'
+    #         -'0'
+    #         - 0
+    #     '{unsigned_32}'
+
+    # data_20:
+
+    # reg_offset:
+
+    alu_src2:
+        '{reg}':
+            - '0'
+            - 0
+            - '00000000000000000'
+        '{data_20}':
+            - '1'
+            - 0
+
+    move_src:
+        'SR': '0100000000000000000000'
+        '{reg}':
+            - '00'
+            - 0
+            - '00000000000000000'
+
+    move_dest:
+        'SR': '0001'
+        '{reg}':
+            - 0
+            - '0'
+
+    cc:
+        '_NN': '0010'
+        '_NV': '0110'
+        '_NC': '0100'
+        '_NE': '1000'
+        '_NZ': '1000'
+        '_N': '0001'
+        '_C': '0011'
+        '_V': '0101'
+        '_Z': '0111'
+        '_M': '0001'
+        '_P': '0010'
+        '_EQ': '0111'
+        '_ULE': '1001'
+        '_UGT': '1010'
+        '_SLT': '1011'
+        '_SLE': '1100'
+        '_SGE': '1101'
+        '_SGT': '1110'
+        '_ULT': '0011'
+        '_UGE': '0100'
+        '' : '0000'

@@ -1,0 +1,102 @@
+####################################################################################################
+#                   FRISC assembly language specification version 1.0                              #
+####################################################################################################
+
+consts:
+    word_size: 8
+    line_size: 32
+    words_per_line: 4
+    max_memory: 1048576
+
+    base_code:
+        B:  2
+        O:  8
+        D: 10
+        H: 16
+    default_base: 16
+    max_source_line_length: 80
+    separators: '\s|,|(\+|-|\(|\)|(?<=JP|JR)_|(?<=CALL)_)'
+
+    origin_cmd: 'ORG'
+    equals_cmd: 'EQU'
+    define_data:
+        DW:     4
+        DH:     2
+        DB:     1
+    define_space: 'DS'
+
+codes:
+    ALU:
+        OR:     '00001'
+        AND:    '00010'
+        XOR:    '00011'
+        ADD:    '00100'
+        ADC:    '00101'
+        SUB:    '00110'
+        SBC:    '00111'
+        ROTL:   '01000'
+        ROTR:   '01001'
+        SHL:    '01010'
+        SHR:    '01011'
+        ASHR:   '01100'
+    MEM:
+        LOADB:  '10010'
+        STOREB: '10011'
+        LOADH:  '10100'
+        STOREH: '10101'
+        LOAD:   '10110'
+        STORE:  '10111'
+    STACK:
+        PUSH:   '10001'
+        POP:    '10000'
+    CTRL:
+        JP:     '11000'
+        CALL:   '11001'
+    RET:
+        RET:    '11011'
+        RETI:   '11011'
+        RETN:   '11011'
+        HALT:   '11111'
+    CMP:    '01101'
+    MOVE:   '00000'
+    JR:     '11010'
+
+    REG:
+        R0:     '000'
+        R1:     '001'
+        R2:     '010'
+        R3:     '011'
+        R4:     '100'
+        R5:     '101'
+        R6:     '110'
+        R7:     '111'
+        SP:     '111'
+
+    COND:
+        NN:     '0010'
+        NV:     '0110'
+        NC:     '0100'
+        NE:     '1000'
+        NZ:     '1000'
+        N:      '0001'
+        C:      '0011'
+        V:      '0101'
+        Z:      '0111'
+        M:      '0001'
+        P:      '0010'
+        EQ:     '0111'
+        ULE:    '1001'
+        UGT:    '1010'
+        SLT:    '1011'
+        SLE:    '1100'
+        SGE:    '1101'
+        SGT:    '1110'
+        ULT:    '0011'
+        UGE:    '0100'
+        $ :     '0000'
+
+    RET_CODE:
+        RET:    '00'
+        RETI:   '01'
+        RETN:   '11'
+        HALT:   '00'

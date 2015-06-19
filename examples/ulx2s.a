@@ -1,0 +1,147 @@
+;
+;
+;   ____                _
+;  |  _ \ ___  __ _  __| |_ __ ___   ___
+;  | |_) / _ \/ _  |/ _  |  _   _ \ / _ \
+;  |  _ |  __/ (_| | (_| | | | | | |  __/
+;  |_| \_\___|\__,_|\__,_|_| |_| |_|\___| - seriously, read it!
+;
+; Version 0.9:
+; This project is still in development,
+; please report any encountered bugs or ideas to FER mail of author.
+;
+; - all changes of code will be remembered even after closing of tabs
+;   to reset to this demonstration simply delete all content and refresh page
+; - some useful editor shortcuts:
+;
+;    * Ctrl + Enter             - assemble code
+;    * Ctrl + K (or Ctrl + \)   - toggle comments on selected lines
+;    * Tab                      - indent selected (current) lines
+;    * Shift + Tab              - unindent selected (current) lines
+;
+; - you can find sample code along with comments on specifics for E2LP and
+;   ULX2S boards below, for information on how to transfer and run assembled
+;   code please click links on the bottom right
+;
+
+
+
+; SP initialization is not required for ULX2S since boot-loader will already
+; set it to correct location.
+		ORG 0
+        MOVE 1000, SP
+        JP MAIN
+
+
+
+; This sample program will fill first 16 (dec.) locations of LCDDATA that are
+; displayed on LCD on E2LP board (or printed to the terminal on ULX2S) with
+; numbers from 0 to F.
+
+		ORG 100
+MAIN    MOVE 0, R0
+		MOVE LCDDATA, R1
+LOOP    CMP R0, 10
+		JP_EQ ENDMAIN
+		STORE R0, (R1)
+		ADD R0, 1, R0
+		ADD R1, 4, R1
+		JP LOOP
+
+ENDMAIN CALL PRINTDATA		; PRINTDATA_ULX for ULX2S
+		HALT
+
+
+
+; Print data to RS232 on ULX2S
+; It will output data from first PRINTCOUNT positions starting at LCDDATA
+; to the connected terminal. It can be called multiple times, each time it will
+; print current values at LCDDATA.
+;
+; Based on examples on http://www.nxlab.fer.hr/dl/frisc.html
+PUTCHAR         EQU 3FE4
+PUTHEX_W        EQU 3FEC
+PRINTCOUNT      EQU 10; How many locations to print starting at LCDDATA
+
+PRINTDATA_ULX   PUSH R0
+				PUSH R4
+				PUSH R5
+				PUSH R6
+				MOVE 0, R5
+				MOVE LCDDATA, R6
+
+PRINTLOOP_ULX   CMP R5, PRINTCOUNT
+				JP_EQ ENDPRINTDATA
+				LOAD R4, (R6)
+				MOVE R4, R0; print word at current position
+				CALL PUTHEX_W
+				MOVE 0D, R0
+				CALL PUTCHAR; print CR
+				MOVE 0A, R0
+				CALL PUTCHAR; print LF
+				ADD R5, 1, R5
+				ADD R6, 4, R6
+				JP PRINTLOOP_ULX
+
+ENDPRINTDATA    MOVE 0D, R0; Print blank line at the end.
+				CALL PUTCHAR; print CR
+				MOVE 0A, R0
+				CALL PUTCHAR; print LF
+						POP R6
+				POP R5
+				POP R4
+				POP R0
+				RET
+
+
+
+; Print data to LCD on E2LP
+; There will be displayed 4 memory locations, first on top left, last on bottom
+; right. You can set offset (in increments by 4) by changing switches from the
+; down to up position. It can't be called multiple times since it will forever
+; loop print registers at given offset and update offset based on switches.
+;
+; Copyright FER 2015, print_loop_v3.txt
+; http://www.fer.unizg.hr/_download/repository/arh_e2lp.zip
+PRINTDATA       MOVE %B 011, R0
+				STORE R0, (%H FFFF0000) ; set GPIO for SW - input mode without interrupts
+				LOAD R0, (%H FFFF0004) ; read status of SW
+				SHL R0, 4, R0
+				MOVE LCDDATA, R1
+				ADD R0, R1, R2
+				MOVE 4, R3
+PRINTLOOP       CALL LCDWRITE
+				ADD R2, 4, R2
+				SUB R3, 1, R3
+				CMP R3, 0
+				JP_NE PRINTLOOP
+				JP PRINTDATA
+
+LCDWRITE        LOAD R0, (%H FFFFF008)
+				CMP R0, 0
+				JR_EQ LCDWRITE
+				MOVE 1, R0
+				STOREB R0, (%H FFFFF004)
+				LOAD R0, (LCDCURS)
+				ADD R0, 1, R0
+				STORE R0, (LCDCURS)
+				CMP R0, 3
+				JP_EQ ROW2
+				CMP R0, 6
+				JP_EQ ROW1
+				JP NOMOVE
+ROW1            MOVE %B 10000000, R0
+				STOREB R0, (%H FFFFF005)
+				MOVE 0, R0
+				STORE R0, (LCDCURS)
+				JR LCDWRITE
+ROW2            MOVE %B 11000000, R0
+				STOREB R0, (%H FFFFF005)
+				JR LCDWRITE
+NOMOVE          LOAD R0, (R2)
+				STORE R0, (%H FFFFF000)
+				RET
+
+LCDCURS   		DW %H 00000000
+LCDDATA   		DS %D 1024
+	

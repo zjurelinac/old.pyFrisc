@@ -1,0 +1,14 @@
+; A very short code
+	ORG 0
+	MOVE 1000, SP
+	ADD R0, 2, R0
+	ADD R0, 2, R0
+	ADD R0, 2, R0
+	ADD R0, 2, R0
+	HALT
+
+	ORG 24
+	ADD R0, 1, R0
+
+	ORG 0FFF0
+	DW 2

@@ -1,5 +1,6 @@
 from itertools import chain
 from math import ceil, log
+from utils import *
 
 import os.path
 import re
@@ -9,6 +10,7 @@ import yaml
 data = dict()
 labels = dict()
 memory = []
+maxnum = 0
 
 def show_error( s ):
     return s, False
@@ -29,23 +31,6 @@ def place_in_mem( res, n ):
         memory[ n ] = res[ data[ 'consts' ][ 'word_size' ]*i : data[ 'consts' ][ 'word_size' ]*(i+1) ]
         n += 1
 
-def compl2( x, w ):
-    return ( '{:0>' + str( w ) + 'b}' ).format( 2**w - int( x, 2 ) )
-
-# TODO
-def extend20( x ):
-    if abs( x ) > 2**32:
-        raise ValueError( 'Number larger than 32 bits.' )
-    y = '{:0>32b}'.format( abs( x ) )
-    if x < 0:
-        x = compl2( y, 32 )
-
-    p = y.find( '1' if y[ 0 ] == '0' else '0' )
-    if p > -1 and p <= 12:
-        raise ValueError( 'Number too large to fit into 20 bits.' )
-    else:
-        return y[ 12: ]
-
 def to_little_endian( x, n ):
     i = 0
     arr = []
@@ -53,20 +38,6 @@ def to_little_endian( x, n ):
         arr.append( x[ data[ 'consts' ][ 'word_size' ]*i : data[ 'consts' ][ 'word_size' ]*(i+1) ] )
     return ''.join( reversed( arr ) )
 
-def fits_into( x, b ):
-    return x == 0 or int( log( x, 2 ) ) < b
-
-def bin_to_hex( x ):
-    return ( '{:0>' + str( len( x ) // 4 ) + 'X}' ).format( int( x, 2 ) )
-
-def bin_to_pretty_hex( x ):
-    a = bin_to_hex( x )
-    s = ''
-    for i in range( 0, len( a ), 2 ):
-        s += a[ i:i+2 ] + ' '
-    return s[ : -1 ]
-
-# TODO check if constant too large for 32 bits
 def parse_constant( args, leftovers = True ):
     if not args:
         raise ValueError( 'Nothing to parse.' )
@@ -77,6 +48,10 @@ def parse_constant( args, leftovers = True ):
     elif args[ 0 ][ 0 ].isdigit():
         r = int( args[ 0 ], data[ 'consts' ][ 'default_base' ] )
         a = args[ 1: ] if len( args ) > 1 else []
+
+    elif args[ 0 ][ 0 ] == '-':
+        r = -int( args[ 1 ] , data[ 'consts' ][ 'default_base' ] )
+        a = args[ 2: ] if len( args ) > 2 else []
 
     elif args[ 0 ] in labels:
         r = labels[ args[ 0 ] ]
@@ -208,6 +183,7 @@ def parse_jr( cmd, args, n ):
         args = args[ 2: ] if len( args ) > 2 else []
     else: flag = '$'
 
+    # TODO: Beware, if label, that's ok, if a bare number, NOT OK, won't jump N places forward but to address N
     offset = parse_constant( args, False )
     result = to_little_endian( data[ 'codes' ][ 'JR' ] + '1' + data[ 'codes' ][ 'COND' ][ flag ] + '00'
         + extend20( offset - n - 4 ), data[ 'consts' ][ 'words_per_line' ] )
@@ -248,7 +224,7 @@ def parse_lines( ls ):
     num = 0
     for l in ls:
         res = { 'original' : l }
-        sl = l.split( ';', maxsplit = 1 )[ 0 ]
+        sl = l.upper().split( ';', maxsplit = 1 )[ 0 ]
         if sl:
             res[ 'blank' ] = False
             if sl[ 0 ].isspace(): lab = ''
@@ -302,6 +278,9 @@ def parse_lines( ls ):
     if num >= data[ 'consts' ][ 'max_memory' ]:
         raise ValueError( 'Too much memory used' )
 
+    global maxnum
+    maxnum = num
+
     return lines
 
 def assemble( f ):
@@ -314,7 +293,8 @@ def assemble( f ):
             1. readable file containing the machine code together with it's source
             2. binary file containing only the machine code
     """
-    global data, memory
+    print( 'Assembling file', f )
+    global data, memory, maxnum
     data = yaml.load( open( 'config/definitions/frisc.lang.yaml', 'r' ).read() )
     memory = [ '00000000' ] * data[ 'consts' ][ 'max_memory' ]
 
@@ -331,6 +311,7 @@ def assemble( f ):
 
     pfile = open( base + '.p', 'w' )
     efile = open( base + '.e', 'wb' )
+
 
     j = 1
     for p in pls:
@@ -367,8 +348,7 @@ def assemble( f ):
                     p[ 'parsed' ] = define_data( p[ 'cmd' ], p[ 'args' ], p[ 'num' ] )
                     multiple = True
                 elif p[ 'cmd' ] == data[ 'consts' ][ 'define_space' ]:
-                    p[ 'parsed' ] = define_space( p[ 'cmd' ], p[ 'args' ], p[ 'num' ] )
-                    multiple = True
+                    p[ 'blank' ] = True
                 else:
                     print( p )
                     raise ValueError( 'Unknown command' )
@@ -399,4 +379,4 @@ def assemble( f ):
     return 'Source successfully assembled.', True
 
 if __name__ == "__main__":
-    assemble( sys.argv[ 1 ] )
+    print( assemble( sys.argv[ 1 ] ) )

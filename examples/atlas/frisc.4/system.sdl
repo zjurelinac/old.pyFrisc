@@ -1,0 +1,92 @@
+frequency = 10 MHz;
+
+component {
+
+	// Procesor FRISC i memorija 64 Kilobajta
+	"frisc.cdl"  = p;
+	"memory.cdl" = m;
+
+	"ct.cdl"  = ct;
+	"dma.cdl" = dma;
+	"vj.cdl"  = vj;
+
+	// Pomocne komponente
+	"pullup.cdl"  = pu;
+	"decoder.cdl" = decod;
+}
+
+
+bus {
+
+	////////////////////////////////////////////////
+	// 
+	// Glavne sabirnice izmedju procesora i memorije
+	// 
+	////////////////////////////////////////////////
+
+	data_bus/.32./ = p.D, m.D, ct.data, dma.DATA, vj.DATA;
+	address_bus/.32./ = p.A, m.A, decod.ADR, ct.adr, dma.ADR, vj.ADR;
+	read = p.READ, m.READ, decod.READ, ct.READ, dma.READ, vj.READ;
+	write = p.WRITE, m.WRITE, decod.WRITE, ct.WRITE, dma.WRITE;
+	size/.2./ = p.SIZE, m.SIZE, dma.SIZE;
+
+
+	////////////////////////////////////////////////
+	// 
+	// Spajanje CT na prekide od FRISC-a
+	// Spajanje clk na ulaze od CT
+	// 
+	////////////////////////////////////////////////
+
+	int1 = p.INT1, ct.int;
+	CNT = ct.cnt, pu.clk;
+    zc1 = ct.zc;
+	CT_ID /.32./ = pu.ID_1, ct.ID;
+
+
+	////////////////////////////////////////////////
+	// 
+	// Spajanje DMA na prekide, BREQ i BACK od FRISC-a
+	// 
+	////////////////////////////////////////////////
+
+	int2 = p.INT2, dma.INT;
+	breq = p.BREQ, dma.BREQ;
+	back = p.BACK, dma.BACK;
+
+
+	////////////////////////////////////////////////
+	// 
+	// Dekoder za memoriju, CT1 i DMA
+	//
+	// Aktivira memoriju kad je adresa:
+	// od 0 do 65535 i read ili write je aktivan
+	// 
+	// Aktivira CT kad je adresa:
+	// od FFFF0000 do FFFF000F i read ili write je aktivan
+	// 
+	// Aktivira DMA kad je adresa:
+	// od FFFF0010 do FFFF0027 i read ili write je aktivan
+	// 
+	////////////////////////////////////////////////
+
+    mem_select = decod.MEM_SELECT, m.CS;
+    ct_select  = decod.CT_SELECT, ct.cs;
+    dma_select = decod.DMA_SELECT, dma.CS;
+
+
+	////////////////////////////////////////////////
+	// 
+	// Definiranje nespojenih pinova.
+	// Terminiranje nekoristenih pinova
+	// pomocu komponente pu (pullup).
+	// 
+	////////////////////////////////////////////////
+
+	iack = p.IACK;
+
+	stanje_1 = pu.stanje_1,
+		p.INT0, p.INT3,
+		p.WAIT, p.RESET;
+}
+

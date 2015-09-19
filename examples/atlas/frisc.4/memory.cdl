@@ -1,0 +1,139 @@
+
+registers {
+	mem[65536] /.8./;	//64K x 8 bita = 64 kilobajta
+}
+
+
+variables {
+	address/.32./,
+	data/.32./,
+	pomak/.32./;
+}
+
+
+pins {
+	D/.32./,
+	A/.32./,
+	READ,
+	WRITE,
+	SIZE/.2./,
+    CS;
+}
+
+
+init {
+
+	let address=0;
+	while(address<=65535) {
+		let mem[address]=0;
+		inc(address, address);
+	}
+
+	disable;
+}
+
+run {
+
+
+	////////////////////////////////////
+	// Provjera je li napravljen load
+	////////////////////////////////////
+
+	if( mem[0]==0  and  mem[1]==0  and  mem[2]==0  and  mem[3]==0 ) {
+		print( /, /, "===============================" );
+		print( /, /, "MORATE NAPRAVITI load PRIJE run", /, / );
+		print(  "===============================", /, / );
+		exit;
+	}
+
+
+	forever {
+
+		/////////////////////////////////
+		/////  POCETAK PRISTUPA
+		/////////////////////////////////
+
+		wait ( rise(CS) );
+			let address=A;
+			delay 1 bc;
+
+
+		/////////////////////////////////
+		/////  CITANJE
+		/////////////////////////////////
+
+		if (READ=0) {
+
+			// Cita se cijela 32-bitna rijec u kojoj se
+			// nalazi trazeni bajt, polurijec ili rijec.
+			// Procesor mora izdvojiti podatak i obrisati
+			// smece iz ostatka procitanog 32-bitnog podatka.
+
+			let address/.0..1./ = %B 00;
+			let data/.0..7./ = mem [ address ]; 
+			let address/.0..1./ = %B 01;
+			let data/.8..15./ = mem [ address ]; 
+			let address/.0..1./ = %B 10;
+			let data/.16..23./ = mem [ address ]; 
+			let address/.0..1./ = %B 11;
+			let data/.24..31./ = mem [ address ]; 
+
+			let D=data;
+		}
+
+
+		/////////////////////////////////
+		/////  PISANJE
+		/////////////////////////////////
+
+		if (WRITE=0) {
+
+			// Procesor salje podatak na ispravnom polozaju
+			// unutar 32-bitnog podatka. Ostali bitovi sadrze
+			// smece. Memorija uzima samo onaj dio podatka koji
+			// joj treba, a smece zanemaruje.
+
+			let data=D;
+
+			// Vraca podatak u najnize bitove radi lakse manipulacije.
+			// U pravoj memoriji postoji direktan spoj bajta podatka
+			// na odgovarajucu memoriju.
+
+			let pomak=0;
+			let pomak/.3..4./=address/.0..1./;
+			shiftrl( data, pomak, data);
+
+			decode ( SIZE ) {
+
+				%B 01: { // BYTE
+					let mem [ address ] = data/.0..7./; 
+				}
+
+				%B 10: { // HALFWORD
+					let mem [ address ] = data/.0..7./; 
+					let address/.0./ = %B 1;
+					let mem [ address ] = data/.8..15./; 
+				}
+
+				%B 11: { // WORD
+					let mem [ address ] = data/.0..7./; 
+					let address/.0..1./ = %B 01;
+					let mem [ address ] = data/.8..15./; 
+					let address/.0..1./ = %B 10;
+					let mem [ address ] = data/.16..23./; 
+					let address/.0..1./ = %B 11;
+					let mem [ address ] = data/.24..31./; 
+				}
+			}
+		}
+
+
+		/////////////////////////////////
+		/////  KRAJ PRISTUPA
+		/////////////////////////////////
+
+		wait( fall(CS));
+			delay 1 bc;
+			disable D; // redundantno za pisanje, ali treba za citanja
+	}	
+}

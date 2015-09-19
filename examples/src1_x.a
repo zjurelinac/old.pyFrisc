@@ -1,12 +1,12 @@
 ; An example FRISC assembler code
 
-	ORG 0
+	`ORG 0
 	MOVE 1000, SP
-	LOAD R0, (20)
+	LOAD R0, (100)
 	ADD R0, 1, R0
-	STORE R0, (20)
+	STORE R0, (100)
 	HALT
 
-	ORG 20
+	`ORG 20
 	; some sort of a data definition should go here
 	DW 17

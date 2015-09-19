@@ -1,0 +1,503 @@
+;===========================================
+; 		external units memory locations  
+;===========================================
+
+; GPIO SWITCH
+; working in interrupt mode
+IOSW_CTRL		EQU	0FFFF0000
+IOSW_DATA		EQU	0FFFF0004
+;IOSW_IACK		EQU	0FFFF0008
+;IOSW_IEND		EQU	0FFFF000C
+
+; GPIO BUTTON
+; working in interrupt mode
+IOBTN_CTRL		EQU	0FFFFE000
+IOBTN_DATA		EQU	0FFFFE004
+;IOBTN_IACK		EQU	0FFFFE008
+;IOBTN_IEND		EQU	0FFFFE00C
+
+; RTC1
+; ignored in main program, only used for linking to the RTC2
+RTC1_DATA		EQU	0FFFF0100
+RTC1_CTRL		EQU	0FFFF0104
+
+; RTC2
+; used in interrupt mode for timing hundredths of a second
+RTC2_DATA		EQU	0FFFF0200
+RTC2_CTRL		EQU	0FFFF0204
+RTC2_IACK		EQU	0FFFF0208
+RTC2_IEND		EQU	0FFFF020C
+
+; GPIO LED
+; setting bits mode
+IOLED_CTRL		EQU	0FFFFD000
+IOLED_DATA		EQU	0FFFFD004
+
+; LCD
+LCD_DATA		EQU	0FFFFF000
+LCD_CTRL		EQU	0FFFFF004
+LCD_STAT		EQU	0FFFFF008
+
+;===========================================
+;			Start of the program
+;===========================================
+		ORG 	0
+		MOVE 	1000, SP
+		JP 		MAIN
+		DW 		200
+		
+
+;===========================================
+;		Initialization of external units
+;===========================================
+MAIN	LOAD 	R0, (BTN_CTRL)
+		STORE 	R0, (IOBTN_CTRL)
+		
+		MOVE	2, R0
+		STORE 	R0, (IOLED_CTRL)
+		
+		MOVE 	1, R0
+		STORE 	R0, (IOLED_DATA)
+		
+WAITS 	LOAD 	R0, (IOBTN_DATA)
+		AND 	R0, 4, R0
+		JP_Z 	WAITS		
+
+RSETUP 	LOAD 	R0, (SW_CTRL)
+		STORE 	R0, (IOSW_CTRL)
+		
+		MOVE 	%D 100, R0
+		STORE 	R0, (RTC1_DATA)
+		
+		MOVE 	%D 675, R0
+		STORE 	R0, (RTC2_DATA)
+		
+		MOVE 	10, SR
+		
+		MOVE 	3, R0 			; 	later attempt nonmasking
+		STORE 	R0, (RTC2_CTRL)
+		
+		MOVE  	1, R0
+		STORE 	R0, (RTC1_CTRL)
+
+
+
+WAITE 	LOAD 	R6, (IOSW_DATA)
+
+		LOAD 	R1, (STATUS)
+		MOVE 	R1, R2
+		
+		MOVE 	0, R3
+		
+LOOP		MOVE 	0, R4
+			MOVE 	0, R5
+			SHR		R6, 1, R6
+			ADC		R4, 0, R4			; 	R4 is the current bit of SWITCH
+			SHR		R2, 1, R2
+			ADC		R5, 0, R5 			; 	R5 is the current bit of STATUS
+			
+			CMP		R4, R5 				; 	if SWITCH 1 and STATUS 0, new swimmer arrived
+			JP_ULE 	SKIP 				;	else skip
+
+			MOVE 	1, R0
+			SHL 	R0, R3, R0
+			OR 		R0, R1, R1
+			STORE 	R1, (STATUS)
+			STORE 	R1, (IOLED_DATA)
+
+			PUSH  	R1
+			PUSH 	R2
+			PUSH 	R3
+			PUSH 	R4
+			MOVE 	R3, R0
+			CALL 	STRDATA
+			CALL 	PASSDISP
+			POP 	R4
+			POP		R3
+			POP		R2
+			POP 	R1 
+
+			LOAD 	R0, (NUM_FIN)
+			ADD 	R0, 1, R0
+			STORE 	R0, (NUM_FIN)
+SKIP	
+			ADD 	R3, 1, R3
+			CMP 	R3, 8
+			JP_NZ 	LOOP		
+
+		LOAD 	R0, (TIMELOCK)
+		CMP 	R0, 1
+		JP_NZ 	NEXT
+
+		CALL 	TIMEDISP
+		MOVE 	0, R0
+		STORE 	R0, (TIMELOCK)
+
+NEXT	CMP 	R1, 0FF
+		JP_NE 	WAITE
+
+RESULTS	MOVE 	0, SR
+		MOVE 	0, R0
+		STORE 	R0, (RTC2_CTRL)
+
+		CALL 	RESDISP
+		HALT
+
+;===========================================
+;  Masking interrupt processing - RTC2 only
+;===========================================
+		ORG 	200
+MIPROC
+		PUSH 	R0
+		PUSH 	R1
+		PUSH 	R2
+		PUSH 	R3
+		MOVE 	SR, R0
+		PUSH 	R0
+		
+		STORE 	R0, (RTC2_IACK)
+		
+		LOAD 	R0, (TIME_H0)
+		ADD 	R0, 1, R0
+		CMP 	R0, 0A
+		JP_NE 	STRH0
+		
+		MOVE 	0, R0
+		LOAD 	R1, (TIME_H1)
+		ADD 	R1, 1, R1
+		CMP 	R1, 0A
+		JP_NE 	STRH1
+		
+		MOVE 	0, R1
+		LOAD 	R2, (TIME_S0)
+		ADD 	R2, 1, R2
+		CMP 	R2, 0A
+		JP_NE 	STRS0
+		
+		MOVE 	0, R2
+		LOAD 	R3, (TIME_S1)
+		ADD		R3, 1, R3
+		CMP 	R3, 0A
+		JP_NE 	STRS1
+		
+		MOVE 	0, R3
+
+STRS1 	STORE 	R3, (TIME_S1)
+STRS0 	STORE 	R2, (TIME_S0)
+STRH1 	STORE 	R1, (TIME_H1)
+STRH0	STORE 	R0, (TIME_H0)
+		
+		MOVE 	1, R0
+		STORE 	R0, (TIMELOCK)
+
+		LOAD 	R0, (TIME_TOT)
+		ADD 	R0, 1, R0
+		STORE 	R0, (TIME_TOT)
+
+		LOAD 	R1, (NUM_FIN)
+		CMP 	R1, 0
+		JP_Z 	NOLED
+		
+NOLED 	STORE 	R0, (RTC2_IEND)
+	
+		POP 	R0
+		MOVE 	R0, SR
+		POP		R3
+		POP 	R2
+		POP 	R1
+		POP 	R0
+		RETI
+		
+;===========================================
+; 			Store contestant data
+;===========================================
+STRDATA 	; 	lane num in R0
+		PUSH 	R5
+		PUSH 	R6
+
+		LOAD 	R1, (TIME_S1)
+		LOAD 	R2, (TIME_S0)
+		LOAD 	R3, (TIME_H1)
+		LOAD 	R4, (TIME_H0)
+
+		LOAD 	R5, (NUM_FIN)
+		CMP 	R5, 3
+		JP_EQ 	ENDSTR
+		
+		SHL 	R5, 2, R5
+		STORE 	R0, (R5+CLANE) 
+
+		SHL 	R5, 2, R5
+		MOVE 	CTIME, R6
+		ADD 	R5, R6, R5
+
+		STORE 	R1, (R5)
+		STORE 	R2, (R5+4)
+		STORE 	R3, (R5+8)
+		STORE 	R4, (R5+0C)
+		
+ENDSTR	POP 	R6
+		POP 	R5
+		RET
+
+;===========================================
+; 			LCD wait procedure
+;===========================================
+LCDWAIT	
+		PUSH 	R0
+WAITL 	LOAD 	R0, (LCD_STAT)
+		CMP 	R0, 0
+		JP_Z 	WAITL		
+		POP 	R0
+		RET
+
+;===========================================
+; 			LCD write only time
+;===========================================
+TIMEDISP
+		PUSH 	R0
+		
+		MOVE 	%B 1000000000000000, R0
+		CALL 	LCDWAIT
+		STORE 	R0, (LCD_CTRL)
+		
+		LOAD 	R0, (TIME_S1)
+		ADD 	R0, 30, R0
+		CALL 	LCDWAIT
+		STOREB 	R0, (LCD_DATA)
+		
+		LOAD 	R0, (TIME_S0)
+		ADD 	R0, 30, R0
+		CALL 	LCDWAIT
+		STOREB	R0, (LCD_DATA)
+		
+		LOAD 	R0, (ASCII_COL)
+		CALL 	LCDWAIT
+		STOREB 	R0, (LCD_DATA)
+		
+		LOAD 	R0, (TIME_H1)
+		ADD 	R0, 30, R0
+		CALL 	LCDWAIT
+		STOREB 	R0, (LCD_DATA)
+		
+		LOAD 	R0, (TIME_H0)
+		ADD 	R0, 30, R0
+		CALL 	LCDWAIT
+		STOREB 	R0, (LCD_DATA)
+		
+		POP 	R0
+		RET
+
+;===========================================
+; 			LCD display the results
+;===========================================
+RESDISP
+		PUSH 	R0
+		PUSH 	R1
+		PUSH 	R2
+		PUSH 	R3
+		
+		MOVE 	%B 1000000000000010, R0
+		CALL 	LCDWAIT
+		STORE 	R0, (LCD_CTRL)
+
+		LOAD 	R1, (CLANE0)
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+		MOVE 	%B 1000000000000000, R0
+		CALL 	LCDWAIT
+		STORE 	R0, (LCD_CTRL)
+
+		LOAD 	R1, (CLANE0)
+		ADD 	R1, 31, R1
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+		LOAD 	R1, (ASCII_SP)
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+		MOVE 	CTIME0, R2
+		LOAD 	R1, (R2)
+		ADD 	R1, 30, R1
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+		LOAD 	R1, (R2+4)
+		ADD 	R1, 30, R1
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+		LOAD 	R1, (ASCII_COL)
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+		LOAD 	R1, (R2+8)
+		ADD 	R1, 30, R1
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+		LOAD 	R1, (R2+0C)
+		ADD 	R1, 30, R1
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+		
+; 	SECOND SWIMMER
+		MOVE 	0C000, R0
+		CALL 	LCDWAIT
+		STORE 	R0, (LCD_CTRL)
+
+		MOVE 	CTIME1, R2
+
+		LOAD 	R1, (CLANE1)
+		ADD 	R1, 31, R1
+		CALL 	LCDWAIT
+
+		STOREB 	R1, (LCD_DATA)
+		LOAD 	R1, (ASCII_SP)
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+		LOAD 	R1, (R2)
+		CALL 	LCDWAIT
+		ADD 	R1, 30, R1
+		STOREB 	R1, (LCD_DATA)
+
+		LOAD 	R1, (R2+4)
+		ADD 	R1, 30, R1
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+		LOAD 	R1, (ASCII_COL)
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+		LOAD 	R1, (R2+8)
+		ADD 	R1, 30, R1
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+		LOAD 	R1, (R2+0C)
+		ADD 	R1, 30, R1
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+; THIRD SWIMMER
+
+		MOVE 	0C800, R0
+		CALL 	LCDWAIT
+		STORE 	R0, (LCD_CTRL)
+
+		MOVE 	CTIME2, R2
+		LOAD 	R1, (CLANE2)
+		ADD 	R1, 31, R1
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+		LOAD 	R1, (ASCII_SP)
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+		LOAD 	R1, (R2)
+		ADD 	R1, 30, R1
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+		LOAD 	R1, (R2+4)
+		ADD 	R1, 30, R1
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+		LOAD 	R1, (ASCII_COL)
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+		LOAD 	R1, (R2+8)
+		ADD 	R1, 30, R1
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+		LOAD 	R1, (R2+0C)
+		ADD 	R1, 30, R1
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+
+		POP 	R3
+		POP 	R2
+		POP 	R1
+		POP		R0
+		RET
+		
+;===========================================
+; 			LCD display the pass
+;===========================================
+PASSDISP 	; 	R1-R4 time, R0 lane
+		PUSH 	R5
+
+		MOVE 	0C000, R5
+		CALL 	LCDWAIT
+		STORE 	R5, (LCD_CTRL)
+
+		ADD 	R0, 31, R0
+		CALL 	LCDWAIT
+		STOREB 	R0, (LCD_DATA)
+
+		LOAD 	R5, (ASCII_SP)
+		CALL 	LCDWAIT
+		STOREB 	R5, (LCD_DATA)
+
+		LOAD 	R5, (ASCII_COL)
+
+		ADD 	R1, 30, R1
+		ADD 	R2, 30, R2
+		ADD 	R3, 30, R3
+		ADD 	R4, 30, R4
+
+		CALL 	LCDWAIT
+		STOREB 	R1, (LCD_DATA)
+		CALL 	LCDWAIT
+		STOREB 	R2, (LCD_DATA)
+		CALL 	LCDWAIT
+		STOREB 	R5, (LCD_DATA)
+		CALL 	LCDWAIT
+		STOREB 	R3, (LCD_DATA)
+		CALL 	LCDWAIT
+		STOREB 	R4, (LCD_DATA)
+
+		POP 	R5
+		RET
+
+;===========================================
+; 			Variable storage space
+;===========================================
+
+BTN_CTRL 	DW 	3
+SW_CTRL		DW 	3
+
+TIME_H0 	DW 	0
+TIME_H1 	DW 	0
+TIME_S0 	DW 	0
+TIME_S1 	DW 	0
+TIME_TOT 	DW 	0
+
+STATUS 		DW 	0
+NUM_FIN 	DW 	0
+
+CTIME
+CTIME0 		DW 	0, 0, 0, 0
+CTIME1 		DW 	0, 0, 0, 0
+CTIME2		DW 	0, 0, 0, 0
+
+CLANE
+CLANE0 		DW 	0
+CLANE1 		DW 	0
+CLANE2 		DW 	0
+
+TAMPONZONE  DS 	100
+
+ASCII_COL 	DW 	3A
+ASCII_SP 	DW 	20
+
+TIMELOCK 	DW 	0

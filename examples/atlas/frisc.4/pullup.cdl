@@ -1,0 +1,33 @@
+///////////////////////////////////////////////////////////////
+//
+// Pomocna komponenta za zakljucivanje pinova
+// koji se ne koriste:
+// - drzi neaktivno (u 1) sve pinove spojene na stanje_1
+// - propusta CLOCK sustava na clk (uz pomak od pola faze)
+// - drzi stanja na ID-pinovima za CT sklopove (sluze samo
+//   za ljepsi trace-ispis)
+//
+///////////////////////////////////////////////////////////////
+
+pins {
+	clk,
+	stanje_1,
+	ID_1 /.32./;
+}
+
+init { 
+	let clk=0;
+	let stanje_1=1;
+
+	let ID_1 = 1;
+}
+
+run { 
+	forever{
+		on(high(clock));
+		let clk=1;
+		on(low(clock));
+		let clk=0;
+	}
+}
+

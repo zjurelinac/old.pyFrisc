@@ -6,7 +6,7 @@ consts:
     word_size: 8
     line_size: 32
     words_per_line: 4
-    max_memory: 1048576
+    max_memory: 65536
 
     base_code:
         B:  2
@@ -15,7 +15,7 @@ consts:
         H: 16
     default_base: 16
     max_source_line_length: 80
-    separators: '\s|,|(\+|-|\(|\)|(?<=JP|JR)_|(?<=CALL)_)'
+    separators: '\s|,|(\+|-|\(|\)|(?<=JP|JR)_|(?<=CALL|HALT|RETI|RETN)_|(?<=RET)_)'
 
     origin_cmd: 'ORG'
     equals_cmd: 'EQU'

@@ -293,7 +293,6 @@ def assemble( f ):
             1. readable file containing the machine code together with it's source
             2. binary file containing only the machine code
     """
-    print( 'Assembling file', f )
     global data, memory, maxnum
     data = yaml.load( open( 'config/definitions/frisc.lang.yaml', 'r' ).read() )
     memory = [ '00000000' ] * data[ 'consts' ][ 'max_memory' ]
@@ -311,7 +310,6 @@ def assemble( f ):
 
     pfile = open( base + '.p', 'w' )
     efile = open( base + '.e', 'wb' )
-
 
     j = 1
     for p in pls:

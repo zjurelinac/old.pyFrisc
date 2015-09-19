@@ -1,3 +1,4 @@
 			ORG 0
 ASDF_GH 	EQU 100
 			LOAD R0, (ASDF_GH)
+			HALT

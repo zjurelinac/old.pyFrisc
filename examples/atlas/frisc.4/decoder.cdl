@@ -1,0 +1,42 @@
+
+pins {
+	ADR/.32./,
+	READ,
+	WRITE, 
+
+	MEM_SELECT,
+	CT_SELECT,
+	DMA_SELECT;
+}
+
+init { 
+	let MEM_SELECT = 0;
+	let CT_SELECT  = 0;
+	let DMA_SELECT = 0;
+}
+
+run { 
+	forever{
+
+		wait( fall(READ)  or  fall(WRITE) );
+
+		if( ADR <<= %H 0FFFF ) {
+			let MEM_SELECT = 1;
+		} else if ( %H 0FFFF0000 <<= ADR  and  ADR <<= %H 0FFFF000F ) {
+			let CT_SELECT = 1;
+		} else if ( %H 0FFFF1000 <<= ADR  and  ADR <<= %H 0FFFF1017 ) {
+			let DMA_SELECT = 1;
+		}
+
+		wait( rise(READ)  or  rise(WRITE) );
+
+		if( ADR <<= %H 0FFFF ) {
+			let MEM_SELECT = 0;
+		} else if ( %H 0FFFF0000 <<= ADR  and  ADR <<= %H 0FFFF000F ) {
+			let CT_SELECT = 0;
+		} else if ( %H 0FFFF1000 <<= ADR  and  ADR <<= %H 0FFFF1017 ) {
+			let DMA_SELECT = 0;
+		}
+	}
+}
+

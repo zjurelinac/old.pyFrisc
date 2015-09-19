@@ -1,8 +1,5 @@
 from utils import *
-
 import sys
-
-# TODO: Watch for reversal of data in memory ( LE | BE )!!!
 
 class FRISCProcessor:
     SP = '111'
@@ -12,6 +9,7 @@ class FRISCProcessor:
         self.memory = []
         self.annotations = []
         self.registers = {}
+        self.last_changed_address = -1
         self.flags = {
             'TERM' : False,
             'IIF' : False
@@ -57,7 +55,7 @@ class FRISCProcessor:
                     pass
             tnum = num
 
-            self.annotations[ num ] = a.lstrip()
+            self.annotations[ num ] = a.strip()
 
     def run( self ):
         try:
@@ -69,6 +67,9 @@ class FRISCProcessor:
             print( str( e ) )
 
     def run_step( self ):
+        if self.flags[ 'TERM' ]:
+            raise ValueError( 'Program terminated.' )
+
         pc = self.registers[ 'PC' ]
         pci = int( pc, 2 )
         self.registers[ 'PC' ] = to32( pci + 4 )
@@ -84,8 +85,6 @@ class FRISCProcessor:
         cond = cmd[ 6:10 ]
         ret_type = cmd[ 30: ]
 
-        #print( pci, 'executing:', cmd, 'opcode:', opcode )
-
         if opcode == '00000':       # MOVE
             if rs1 == '000':
                 value = imm if func == '1' else self.registers[ rs2 ]
@@ -93,7 +92,6 @@ class FRISCProcessor:
                 if rs1[ 1 ] == '1': rd = 'SR'
                 if rs2[ 1 ] == '1': value = self.registers[ 'SR' ]
 
-            #print( 'MOVE to', rd, 'value', value )
             self.registers[ rd ] = value
 
         elif opcode[ 0 ] == '0':    # ALU
@@ -157,22 +155,18 @@ class FRISCProcessor:
 
             elif opcode == '10100': # LOADH
                 adr_num = from32( adr[ :31 ] + '0' )
-                #print( 'LOADH from', adr_num, 'word', self.get_word_from_mem( adr_num ) )
                 self.registers[ rd ] = self.get_halfword_from_mem( adr_num )
 
             elif opcode == '10101': # STOREH
                 adr_num = from32( adr[ :31 ] + '0' )
-                #print( 'STOREH to', adr_num, 'word', self.get_halfword_from_mem( adr_num ) )
                 self.set_halfword_in_mem( adr_num, self.registers[ rd ] )
 
             elif opcode == '10110': # LOAD
                 adr_num = from32( adr[ :30 ] + '00' )
-                #print( 'LOAD from', adr_num, 'word', self.get_word_from_mem( adr_num ) )
                 self.registers[ rd ] = self.get_word_from_mem( adr_num )
 
             elif opcode == '10111': # STORE
                 adr_num = from32( adr[ :30 ] + '00' )
-                #print( 'STORE to', adr_num )
                 self.set_word_in_mem( adr_num, self.registers[ rd ] )
 
             elif opcode == '10001': # PUSH
@@ -211,9 +205,7 @@ class FRISCProcessor:
                     elif ret_type == '11': # RETN
                         self.flags[ 'IIF' ] = True
 
-
                 elif opcode == '11111': # HALT
-                    print( 'HALT' )
                     self.flags[ 'TERM' ] = True
 
         else:
@@ -234,12 +226,18 @@ class FRISCProcessor:
         self.memory[ i+1 ] = w[ 16:24 ]
         self.memory[ i ] = w[ 24: ]
 
+        self.last_changed_address = i
+
     def set_halfword_in_mem( self, i, hw ):
         self.memory[ i+1 ] = hw[ 16:24 ]
         self.memory[ i ] = hw[ 24: ]
 
+        self.last_changed_address = i
+
     def set_byte_in_mem( self, i, b ):
         self.memory[ i ] = b[ 24: ]
+
+        self.last_changed_address = i
 
     def test_cond( self, cond ):
         sr = self.registers[ 'SR' ]
@@ -295,6 +293,34 @@ class FRISCProcessor:
                              bin_to_hex( self.memory[ i+1 ] ),
                              bin_to_hex( self.memory[ i+2 ] ),
                              bin_to_hex( self.memory[ i+3 ] ), end = '\n' if (i+4) % 16 == 0 else '\t' )
+
+    def get_register( self, i ):
+        if i < 8:
+            val = self.registers[ '{:0>3b}'.format( i ) ]
+        elif i == 8:
+            val = self.registers[ 'PC' ]
+        elif i == 9:
+            val = self.registers[ 'SR' ]
+        else:
+            raise ValueError( 'GR: Unknown register ' + str( i ) )
+
+        return bin_to_pretty_hex( val )
+
+    def get_program_counter( self ):
+        return int( self.registers[ 'PC' ], 2 )
+
+    @staticmethod
+    def get_register_name( i ):
+        if i < 7:
+            return 'R' + str( i )
+        elif i == 7:
+            return 'R7/SP'
+        elif i == 8:
+            return 'PC'
+        elif i == 9:
+            return 'SR'
+        else:
+            raise ValueError( 'GRN: Unknown register ' + str( i ) )
 
 if __name__ == '__main__':
     fp = FRISCProcessor( 1000, sys.argv[ 1 ] )

@@ -129,7 +129,7 @@ def ashr32( x, y ):
     z = x[ 0 ] * iy + x[ :(32-iy) ] if iy < 32 else x[ 0 ]*32
     return z, x[ 32-iy ] if iy < 33 and iy > 0 else '0', '0', z[ 0 ], is_zero( z )
 
-def rotl32( x, y ):
+def rotl32( x, y ): # TODO: bug if negative rotation
     iy = from32( y ) % 32
     if iy < 0: return rotr( x, y )
     z = x[ iy: ] + x[ :iy ]
@@ -140,29 +140,3 @@ def rotr32( x, y ):
     if iy < 0: return rotl( x, y )
     z = x[ 32-iy: ] + x[ : 32-iy ]
     return z, x[ 32-iy ], '0', z[ 0 ], is_zero( z )
-
-# Condition test - UNNECCESSARY
-#
-# def test_C( sr ):
-#     return sr[ 1 ] == '1'
-#
-# def test_NC( sr ):
-#     return sr[ 1 ] == '0'
-#
-# def test_V( sr ):
-#     return sr[ 2 ] == '1'
-#
-# def test_NV( sr ):
-#     return sr[ 2 ] == '0'
-#
-# def test_N( sr ):
-#     return sr[ 0 ] == '0'
-#
-# def test_NN( sr ):
-#     return sr[ 0 ] == '1'
-#
-# def test_Z( sr ):
-#     return sr[ 3 ] == '1'
-#
-# def test_NZ( sr ):
-#     return sr[ 3 ] == '0'

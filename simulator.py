@@ -2,10 +2,10 @@ from utils import *
 import sys
 
 class FRISCProcessor:
-    SP = '111'
 
     def __init__( self, mem_size, program = None ):
         self.MEM_SIZE = mem_size
+        self.SP = '111'
         self.memory = []
         self.annotations = []
         self.registers = {}
@@ -98,44 +98,32 @@ class FRISCProcessor:
             arg1 = self.registers[ rs1 ]
             arg2 = self.registers[ rs2 ] if func == '0' else imm
 
+            # TODO: Modify into ALU operation selector
             if opcode == '00001':   # OR
-                print( 'OR' )
                 self.registers[ rd ], c, v, n, z = or32( arg1, arg2 )
             elif opcode == '00010': # AND
-                print( 'AND' )
                 self.registers[ rd ], c, v, n, z = and32( arg1, arg2 )
             elif opcode == '00011': # XOR
-                print( 'XOR' )
                 self.registers[ rd ], c, v, n, z = xor32( arg1, arg2 )
             elif opcode == '00100': # ADD
-                print( 'ADD' )
                 self.registers[ rd ], c, v, n, z = add32( arg1, arg2 )
             elif opcode == '00101': # ADC
-                print( 'ADC' )
                 self.registers[ rd ], c, v, n, z = add32( arg1, arg2, self.registers[ 'SR' ][ 1 ] )
             elif opcode == '00110': # SUB
-                print( 'SUB' )
                 self.registers[ rd ], c, v, n, z = sub32( arg1, arg2 )
             elif opcode == '00111': # SBC
-                print( 'SBC' )
                 self.registers[ rd ], c, v, n, z = sub32( arg1, arg2, self.registers[ 'SR' ][ 1 ] )
             elif opcode == '01000': # ROTL
-                print( 'ROTL' )
                 self.registers[ rd ], c, v, n, z = rotl32( arg1, arg2 )
             elif opcode == '01001': # ROTR
-                print( 'ROTR' )
                 self.registers[ rd ], c, v, n, z = rotr32( arg1, arg2 )
-            elif opcode == '01001': # SHL
-                print( 'SHL' )
+            elif opcode == '01010': # SHL
                 self.registers[ rd ], c, v, n, z = shl32( arg1, arg2 )
-            elif opcode == '01001': # SHR
-                print( 'SHR' )
+            elif opcode == '01011': # SHR
                 self.registers[ rd ], c, v, n, z = shr32( arg1, arg2 )
-            elif opcode == '01001': # ASHR
-                print( 'ASHR' )
+            elif opcode == '01100': # ASHR
                 self.registers[ rd ], c, v, n, z = ashr32( arg1, arg2 )
             elif opcode == '01101': # CMP
-                print( 'CMP' )
                 c, v, n, z = cmp32( arg1, arg2 )
             else:
                 raise ValueError( 'No such ALU operation' )
@@ -170,25 +158,24 @@ class FRISCProcessor:
                 self.set_word_in_mem( adr_num, self.registers[ rd ] )
 
             elif opcode == '10001': # PUSH
-                self.registers[ SP ] = sub32( self.registers[ SP ], to32( 4 ) )[ 0 ]
-                adr_num = from32( self.registers[ SP ] )
+                self.registers[ self.SP ] = sub32( self.registers[ self.SP ], to32( 4 ) )[ 0 ]
+                adr_num = from32( self.registers[ self.SP ] )
                 self.set_word_in_mem( adr_num, self.registers[ rd ] )
 
-            elif opcode == '10000': # POP
-                adr_num = from32( self.registers[ SP ] )
+            elif opcode == '10000': # POP TODO: error perhaps here as well
+                adr_num = from32( self.registers[ self.SP ] )
                 self.registers[ rd ] = self.get_word_from_mem( adr_num )
-                self.registers[ SP ] = add32( self.registers[ SP ], to32( 4 ) )[ 0 ]
+                self.registers[ self.SP ] = add32( self.registers[ self.SP ], to32( 4 ) )[ 0 ]
 
         elif opcode[ 0:2 ] == '11': # CONTROL
             if self.test_cond( cond ):
                 if opcode == '11000':   # JP
-                    print( 'JP' )
                     self.registers[ 'PC' ] = imm if func == '1' else self.registers[ rs2 ]
 
                 elif opcode == '11001': # CALL
-                    print( 'CALL' )
-                    self.registers[ SP ] = sub32( self.registers[ SP ], to32( 4 ) )[ 0 ]
-                    self.set_word_in_mem( self.registers[ SP ], self.registers[ 'PC' ] )
+                    print( 'CALL' ) # TODO: error lurking here
+                    self.registers[ self.SP ] = sub32( self.registers[ self.SP ], to32( 4 ) )[ 0 ]
+                    self.set_word_in_mem( from32( self.registers[ self.SP ] ), self.registers[ 'PC' ] )
                     self.registers[ 'PC' ] = imm if func == '1' else self.registers[ rs2 ]
 
                 elif opcode == '11010': # JR
@@ -197,8 +184,8 @@ class FRISCProcessor:
 
                 elif opcode == '11011': # RET(_|I|N)
                     print( 'RETX' )
-                    self.registers[ 'PC' ] = self.get_word_from_mem( self.registers[ SP ] )
-                    self.registers[ SP ] = add32( self.registers[ SP ], to32( 4 ) )[ 0 ]
+                    self.registers[ 'PC' ] = self.get_word_from_mem( from32( self.registers[ self.SP ] ) )
+                    self.registers[ self.SP ] = add32( self.registers[ self.SP ], to32( 4 ) )[ 0 ]
 
                     if ret_type == '01': # RETI
                         self.registers[ 'SR' ] = self.registers[ 'SR' ][ :4 ] + '1' + self.registers[ 'SR' ][ 5: ]

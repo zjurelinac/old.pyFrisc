@@ -1,0 +1,65 @@
+                       ; A program for adding two double precision vectors
+                       		ORG 0
+00000000  00 10 80 07  		MOVE 1000, SP
+00000004  A0 00 00 04  		MOVE VECTOR1, R0
+00000008  C0 00 80 04  		MOVE VECTOR2, R1
+0000000C  E0 00 00 05  		MOVE STORAGE, R2
+00000010  9C 00 80 B1  		LOAD R3, (LENGTH)
+                       
+00000014  00 00 00 B6  LOOP	LOAD R4, ( R0 )
+00000018  04 00 80 B6  		LOAD R5, ( R0+4 )
+0000001C  00 00 00 8A  		PUSH R4
+00000020  00 00 80 8A  		PUSH R5
+00000024  00 00 10 B6  		LOAD R4, ( R1 )
+00000028  00 00 90 B6  		LOAD R5, ( R1 )
+0000002C  00 00 00 8A  		PUSH R4
+00000030  00 00 80 8A  		PUSH R5
+00000034  60 00 00 CC  		CALL ADD_DOUBLES
+00000038  00 00 80 82  		POP R5
+0000003C  00 00 00 82  		POP R4
+00000040  0C 00 F0 27  		ADD SP, 0C, SP
+                       
+00000044  00 00 20 BE  		STORE R4, ( R2 )
+00000048  04 00 A0 BE  		STORE R5, ( R2+4 )
+0000004C  08 00 00 24  		ADD R0, 8, R0
+00000050  08 00 90 24  		ADD R1, 8, R1
+00000054  08 00 20 25  		ADD R2, 8, R2
+00000058  01 00 B0 35  		SUB R3, 1, R3
+0000005C  14 00 00 C6  		JP_NZ LOOP
+                       
+                       
+                       ADD_DOUBLES 	; a function which adds two double precision
+00000060  00 00 00 88  		PUSH R0
+00000064  00 00 80 88  		PUSH R1
+00000068  00 00 00 89  		PUSH R2
+0000006C  00 00 80 89  		PUSH R3
+00000070  20 00 70 B4  		LOAD R0, (SP+20)
+00000074  1C 00 70 B5  		LOAD R2, (SP+1C)
+00000078  18 00 F0 B4  		LOAD R1, (SP+18)
+0000007C  14 00 F0 B5  		LOAD R3, (SP+14)
+00000080  00 00 02 22  		ADD R0, R1, R4
+00000084  00 00 A6 2A  		ADC R2, R3, R5
+00000088  00 00 80 81  		POP R3
+0000008C  00 00 00 81  		POP R2
+00000090  00 00 80 80  		POP R1
+00000094  00 00 00 80  		POP R0
+00000098  00 00 00 D8  		RET
+                       		
+0000009C  04 00 00 00  LENGTH	DW 4
+000000A0  0A 00 00 00  VECTOR1 DW %D 10, %D 20, %D 30, %D 40, %D 50, %D 60, %D 7
+          14 00 00 00
+          1E 00 00 00
+          28 00 00 00
+          32 00 00 00
+          3C 00 00 00
+          46 00 00 00
+          50 00 00 00
+000000C0  01 00 00 00  VECTOR2 DW 1, 1, 1, 1, 1, 1, 1, 1
+          01 00 00 00
+          01 00 00 00
+          01 00 00 00
+          01 00 00 00
+          01 00 00 00
+          01 00 00 00
+          01 00 00 00
+                       STORAGE DS 32

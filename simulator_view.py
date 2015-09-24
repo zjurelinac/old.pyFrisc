@@ -21,7 +21,7 @@ class SimulatorView( Gtk.Grid ):
 
         self.set_name( 'simulator-grid' )
 
-        self.simulator = FRISCProcessor( 4096 )     # TODO: Increase later, or on demand - place in settings
+        self.simulator = FRISCProcessor( 16384 )     # TODO: Increase later, or on demand - place in settings
 
         self.init_options()
         self.init_goto_line()
@@ -211,7 +211,7 @@ class SimulatorView( Gtk.Grid ):
         while not self.is_breakpoint() and not self.is_paused() and self.run_step():
             while Gtk.events_pending():
                 Gtk.main_iteration()
-            time.sleep( 0.5 )
+            time.sleep( 0.25 )
 
         self.runButton.set_sensitive( True )
 

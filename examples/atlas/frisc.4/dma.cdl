@@ -1,0 +1,256 @@
+/*
+**   DMA kontroler
+*/
+
+
+registers {
+    dmago   /.1./,       // prijenos je u tijeku (1)
+                         // ili je zavrsen , tj. jos nije poceo (0)
+    adr1    /.32./,      // ishodisna adresa - BA+0
+    adr2    /.32./,      // odredisna adresa - BA+4
+    counter /.32./,      // brojac podataka  - BA+8
+    ccr     /.32./,      // kontrolni registar - BA+12
+    DR      /.32./;      // registar za podatke kod DMA prijenosa
+}
+
+variables {
+	aux_adr /.32./,
+    cita/.1./;
+}
+
+pins {
+    DATA /.32./, ADR /.32./,    // priljucci za povezivanje sa procesorom
+    WRITE, READ,
+	SIZE /.2./,
+    BREQ, BACK,
+    INT,
+	CS;
+}
+
+
+init {
+    disable;
+    let BREQ = 1;        // zahtjev za sabirnicom nije postavljen
+    let INT = 1;
+    let dmago = 0;
+    let adr1 = 0;
+    let adr2 = 0;
+    let counter = 0;
+    let ccr = 0;
+    let DR = 0;
+}
+
+
+/*************   definiranje sabirnickih protokola   *************/
+/*************       za DMA prijenos podataka        *************/
+
+citaj {
+    on( rise( clock ) );         // postavljanje adrese
+        let ADR = adr1;
+		let READ=0;
+    on( fall(clock) ); // cekaj odgovor mem. ili vj
+        let DR = DATA;          // preuzmi podatke
+		let READ=1;
+}
+
+pisi {
+    on( rise( clock ) );         // postavljanje adrese
+        let ADR = adr2;
+        let WRITE = 0;             // dojava ciklusa pisanja
+        let DATA = DR;          // postavi podatak na sabirnicu
+    on( fall(clock) ); // cekaj odgovor mem. ili vj
+        disable DATA;            // oslobodi sabirnicu podataka
+		let WRITE=1;
+}
+
+
+
+/****  programiranje DMA sklopa od strane procesora  ****/
+
+cpu_citaj {
+    //wait( rise( CS )  or  fall( READ )  or  fall( WRITE ) );
+    wait( rise( CS ) );
+
+	if( CS == 1 ) {
+		let aux_adr = ADR;
+
+    	switch ( aux_adr/.2..4./ ) {
+
+	    	0: {	// R/W adrese izvora
+				if ( READ=0 ) let DATA=adr1;
+				if ( WRITE=0 ) {
+					let adr1=DATA;
+					let dmago=0;
+				}
+			}
+
+	    	1: {	// R/W adrese odredista
+				if ( READ=0 ) let DATA=adr2;
+				if ( WRITE=0 ) {
+					let adr2=DATA;
+					let dmago=0;
+				}
+			}
+
+	    	2: {	// R/W brojaca podataka
+				if ( READ=0 ) let DATA=counter;
+				if ( WRITE=0 ) {
+					let counter=DATA;
+					let dmago=0;
+				}
+			}
+
+	    	3: {	// citanje stanja / upis upravljacke rijeci
+				if ( READ=0 ) {
+			    	if( dmago == 1 )
+					let DATA=0;
+			    	else
+					let DATA=1;
+				}
+				if ( WRITE=0) {
+					let ccr=DATA;
+					let dmago=0;
+				}
+			}
+
+	    	4: {	//pokretanje prijenosa
+				if ( READ=0 ) let DATA=0;
+				if ( WRITE=0) {
+					let dmago=1;
+				}
+			}
+
+	    	5: {	// potvrda prihvata prekida
+				if ( READ=0 ) let DATA=0;
+				if ( WRITE=0 ) let INT=1;
+			}
+    	}
+    }
+
+	wait ( fall (CS) );
+	//wait ( fall (CS)  or  rise( READ )  or  rise( WRITE ) );
+	    disable DATA;
+}
+
+/****  izvodjenje prijenosa jednog podatka nakon sto DMA ima bus  ****/
+
+word_transfer {
+
+    trace.1 {
+        print ( /, "DMA   Counter: ", %8.H counter );
+        print ( "   Adr1: ", %8.H adr1 );
+        print ( "   Adr2: ", %8.H adr2 );
+    }
+
+    // READ from adr1
+    if( ccr/.2./ = 0 ) {
+        // adr1 = MEM
+        call citaj;
+        add (adr1, 4, adr1);
+    } else {
+        // adr1 = IO
+        call citaj;
+    }
+
+    trace.1 {
+        print ( "   Data: ", %8.H DR, / );
+        trace.3
+            waitkey;
+    }
+
+    // WRITE to adr2
+    if( ccr/.3./ = 0 ) {
+        // adr2 = MEM
+        call pisi;
+        add (adr2, 4, adr2);
+    } else {
+        // adr2 = IO
+        call pisi;
+    }
+
+    dec (counter,counter);
+}
+
+
+uzmi_bus {
+    let BREQ = 0;
+
+    let cita=1;
+    while ( cita==1 ) {
+        wait ( BACK = 0 or rise( CS ) );
+        //wait ( BACK = 0 or fall(READ) or fall(WRITE) );
+        //if( fall(READ) or fall(WRITE) ) { // ceka se BACK, ali FRISC
+        if( rise( CS ) ) { // ceka se BACK, ali FRISC
+            call cpu_citaj;               // jos cita i pise po mem. ili dma
+        } else {
+            let cita=0;
+        }
+    }
+
+    let READ=1;
+    let WRITE=1;
+    let SIZE=3;
+    delay 1 bc;
+}
+
+
+
+pusti_bus {
+
+	delay 1 bc;
+
+    disable ADR;
+    disable READ;
+    disable WRITE;
+    disable SIZE;
+    let BREQ = 1;
+    wait ( rise( BACK ) );
+}
+
+
+cycle_steal {
+
+    call uzmi_bus;
+
+    call word_transfer;
+
+    call pusti_bus;
+
+    if( counter == 0 ) {
+        let dmago = 0;
+        if (ccr/.0./=1) let INT = 0;
+    }
+}
+
+
+halting {
+
+    call uzmi_bus;
+
+    while (counter >> 0){
+        call word_transfer;
+    }
+    let dmago=0;   // prijenos je zavrsen
+
+    call pusti_bus;
+
+    if (ccr/.0./=1) let INT = 0;
+}
+
+
+
+run {
+    forever {
+
+        call cpu_citaj;         // programiranje DMA sklopa od strane CPU
+
+        if( dmago == 1 ) {      // prijenos potrebnog broja podataka
+            if( ccr/.1./ == 1 ) {
+                call cycle_steal;
+            } else {
+                call halting;
+            }
+        } 
+    }
+}
+

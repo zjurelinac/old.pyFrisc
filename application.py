@@ -1,9 +1,11 @@
 import yaml
+import os.path
 
 from gi.repository import Gtk, Gio, Gdk, Pango
 from editor import Editor
 from console import Console
 from assembler import assemble
+from simulator_view import SimulatorView
 
 class pyFriscApplication( Gtk.Application ):
 
@@ -21,9 +23,9 @@ class pyFriscApplication( Gtk.Application ):
 
         self.load_config()
 
-        self.editor = Editor( self.config )
-        self.console = Console( self.config )
-        self.simulator = Gtk.Label( 'Simulator' )
+        self.editor = Editor( self, self.config )
+        self.console = Console( self, self.config )
+        self.simulator = SimulatorView( self, self.console, self.config )
 
     # GUI operations
     def init_header( self ):
@@ -66,6 +68,7 @@ class pyFriscApplication( Gtk.Application ):
         runButton.set_tooltip_text( 'Run simulation' )
         runButton.set_sensitive( False )
 
+        self.assembleButton = assembleButton
         self.runButton = runButton
 
         optionsButton = Gtk.MenuButton()
@@ -108,8 +111,8 @@ class pyFriscApplication( Gtk.Application ):
         #self.menu.append( Gtk.SeparatorMenuItem() )
         #self.add_menu_item( 'Find...', 'Ctrl-F', self.on_find_click )
         #self.add_menu_item( 'Search and Replace...', 'Ctrl-H', self.on_search_replace_click )
-        #self.menu.append( Gtk.SeparatorMenuItem() )
-        #self.add_menu_item( 'Settings', '', self.on_settings_click )
+        self.menu.append( Gtk.SeparatorMenuItem() )
+        self.add_menu_item( 'Settings', '', self.on_settings_click )
         self.menu.append( Gtk.SeparatorMenuItem() )
         self.add_menu_item( 'About', '', self.on_about_click )
         self.menu.set_name( 'main-menu' )
@@ -163,11 +166,12 @@ class pyFriscApplication( Gtk.Application ):
         self.window = Gtk.ApplicationWindow( title = "pyFRISC IDE", type = Gtk.WindowType.TOPLEVEL )
         self.window.set_name( 'app-window' )
         self.window.set_border_width( 4 )
-        self.window.set_default_size( 960, 700 )
+        self.window.set_default_size( 1080, 700 )
         self.window.set_icon_from_file( 'resources/icon.png' )
 
         self.window.connect( 'delete-event', self.on_quit )
         self.window.connect( 'key-press-event', self.on_keypress )
+        #self.window.connect( 'check-resize', self.on_resize )
 
         self.init_menu()
         self.init_header()
@@ -191,6 +195,13 @@ class pyFriscApplication( Gtk.Application ):
 
         self.store_config()
 
+    # TODO: Change console size on maximize only
+    def on_state_change( self, element, window ):
+        w, h = self.window.get_size()
+        print( w, h )
+        self.paned.set_position( h - 300 )
+        #print( element, window )
+
     # Button events
     def on_open_click( self, element ):
         self.open_file()
@@ -212,10 +223,11 @@ class pyFriscApplication( Gtk.Application ):
         ret, success = assemble( self.config[ 'file_name' ] )
         self.console.show_message( ret, 'success' if success else 'error' )
         if success:
+            self.assembleButton.set_sensitive( False )
             self.runButton.set_sensitive( True )
 
     def on_run_click( self, element ):
-        pass
+        self.run_simulator()
 
     def on_about_click( self, element ):
         self.show_about_dialog()
@@ -267,6 +279,22 @@ class pyFriscApplication( Gtk.Application ):
                 elif event.keyval == ord( 'r' ):
                     self.reload_file()
 
+    def on_editor_contents_changed( self ):
+        self.hb.props.title = '*' + self.config[ 'file_name' ]
+        self.runButton.set_sensitive( False )
+        self.assembleButton.set_sensitive( True )
+
+    # Simulator operations
+    def run_simulator( self ):
+        asm_file = self.config[ 'file_name' ]
+        mc_file = asm_file.rsplit( '.', maxsplit = 1 )[ 0 ] + '.p'
+        self.simulator.load_simulator( mc_file )
+        self.tabs.set_current_page( 1 )
+        self.console.show_message( 'Frisc simulator loaded.', 'info' )
+
+    # def terminate_simulator( self ):
+    #     pass
+
     # File operations
     def new_file( self ):
         if self.editor.is_content_changed():
@@ -286,6 +314,7 @@ class pyFriscApplication( Gtk.Application ):
             self.editor.save_to_file( self.config[ 'file_name' ] )
             self.console.show_message( 'File {} successfully saved.'.format(
                 self.config[ 'file_name' ] ) )
+            self.hb.props.title = self.config[ 'file_name' ]
 
     def save_file_as( self ):
         dialog = self.get_save_as_dialog()
@@ -317,6 +346,7 @@ class pyFriscApplication( Gtk.Application ):
             self.hb.props.title = filename
             self.console.show_message( 'File {} loaded.'.format(
                 self.config[ 'file_name' ] ) )
+            self.assembleButton.set_sensitive( True )
             self.runButton.set_sensitive( False )
 
         dialog.destroy()

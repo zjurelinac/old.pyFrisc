@@ -1,0 +1,98 @@
+pins {
+	output;
+}
+
+
+init {
+	let output=0;
+}
+
+
+pulse {
+	let output=1;
+	delay 2 bc;
+	let output=0;
+}
+
+
+run {
+
+	forever{
+		//*******   1. milisekunda ********//
+				delay 500 us; call pulse;
+
+		//*******   2. milisekunda ********//
+				delay 750 us; call pulse;
+				delay 500 us; call pulse;
+
+		//*******   3. milisekunda ********//
+				delay 500 us; call pulse;
+				delay 250 us; call pulse;
+				delay 250 us; call pulse;
+
+		//*******   4. milisekunda ********//
+				delay 500 us; call pulse;
+				delay 166 us; call pulse;
+				delay 167 us; call pulse;
+				delay 167 us; call pulse;
+
+		//*******   5. milisekunda ********//
+				delay 500 us; call pulse;
+				delay 125 us; call pulse;
+				delay 125 us; call pulse;
+				delay 125 us; call pulse;
+				delay 125 us; call pulse;
+
+		//*******   6. milisekunda ********//
+				delay 500 us; call pulse;
+				delay 100 us; call pulse;
+				delay 100 us; call pulse;
+				delay 100 us; call pulse;
+				delay 100 us; call pulse;
+				delay 100 us; call pulse;
+
+		//*******   7. milisekunda ********//
+				delay 500 us; call pulse;
+				delay  83 us; call pulse;
+				delay  82 us; call pulse;
+				delay  83 us; call pulse;
+				delay  82 us; call pulse;
+				delay  83 us; call pulse;
+				delay  82 us; call pulse;
+
+		//*******   8. milisekunda ********//
+				delay 500 us; call pulse;
+				delay  71 us; call pulse;
+				delay  72 us; call pulse;
+				delay  71 us; call pulse;
+				delay  72 us; call pulse;
+				delay  71 us; call pulse;
+				delay  72 us; call pulse;
+				delay  71 us; call pulse;
+
+		//*******   9. milisekunda ********//
+				delay 500 us; call pulse;
+				delay  62 us; call pulse;
+				delay  63 us; call pulse;
+				delay  62 us; call pulse;
+				delay  63 us; call pulse;
+				delay  62 us; call pulse;
+				delay  63 us; call pulse;
+				delay  62 us; call pulse;
+				delay  63 us; call pulse;
+
+		//*******   10. milisekunda ********//
+				delay 500 us; call pulse;
+				delay  55 us; call pulse;
+				delay  56 us; call pulse;
+				delay  55 us; call pulse;
+				delay  56 us; call pulse;
+				delay  55 us; call pulse;
+				delay  56 us; call pulse;
+				delay  55 us; call pulse;
+				delay  56 us; call pulse;
+				delay  55 us; call pulse;
+				delay 500 us;
+	}
+}
+

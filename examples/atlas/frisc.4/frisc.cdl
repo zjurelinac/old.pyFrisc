@@ -1,0 +1,1346 @@
+/**************************************************************************
+
+	FRISC 2.0:
+		FRISC 2.0 je temeljen na procesoru FRISC 1.0
+		Autor arhitekture: Danko Basch, 30.XII.2005.
+		Autor prve verzije modela za ATLAS: Danko Basch
+
+
+	FRISC 1.0:
+		Autor arhitekture: Mladen Tomic (mentor: Mario Kovac)
+		                   koautori: Alan Goluban, Danko Basch
+		Autor prve verzije modela za ATLAS: Mladen Tomic
+		Prepravci prve verzije modela za ATLAS: Danko Basch
+		Autori druge verzije modela za ATLAS: Danko Basch, Valentin Vidic
+
+**************************************************************************/
+
+registers {
+	PC/.32./,		// Program Counter
+	R[8] /.32./,	// 8 registara opce namjene
+	SR/.8./,		// Status Register
+	IIF/.1./,		// Internal Interrupt Flag
+					// ako je IIF=0, NMI je u toku i svi intovi su zabranjeni
+
+	AR/.32./,		// Address Register
+	DR/.32./,		// Data Register
+	IR/.32./;		// Instruction Register
+}
+
+variables {
+
+	////////////////////////////////////////////
+	// KONSTANTE
+	// Vrijednosti im se postavljaju u init
+	////////////////////////////////////////////
+
+
+	// Sirina pristupa memoriji (za prikljucak SIZE)
+
+	NONE/.2./,
+	BYTE/.2./,
+	HALFWORD/.2./,
+	WORD/.2./,
+
+
+	// Vrste naredaba (za varijablu instruction_type)
+
+	ALU_instr/.2./, 	// Oznake tipa dohvacene naredbe:
+	CTRL_instr/.2./,	// Postavljaju se za vrijeme dekodiranja.
+	MEM_instr/.2./,
+	REG_instr/.2./,
+
+
+	// Strojni kodovi naredaba (za razna dekodiranja)
+
+	OR_opcode/.5./,
+	AND_opcode/.5./,
+	XOR_opcode/.5./,
+	ADD_opcode/.5./,
+	ADC_opcode/.5./,
+	SUB_opcode/.5./,
+	SBC_opcode/.5./,
+	ROTL_opcode/.5./,
+	ROTR_opcode/.5./,
+	SHL_opcode/.5./,
+	SHR_opcode/.5./,
+	ASHR_opcode/.5./,
+	CMP_opcode/.5./,
+
+	MOVE_opcode/.5./,
+
+	JP_opcode/.5./,
+	CALL_opcode/.5./,
+	JR_opcode/.5./,
+	RET_opcode/.5./,
+	HALT_opcode/.5./,
+
+	LOAD_opcode/.5./,
+	STORE_opcode/.5./,
+	LOADB_opcode/.5./,
+	STOREB_opcode/.5./,
+	LOADH_opcode/.5./,
+	STOREH_opcode/.5./,
+	POP_opcode/.5./,
+	PUSH_opcode/.5./,
+
+
+	// O(ne)mogucenost razine pipelinea (za varijable FETCH i EXEC)
+	DISABLED/.32./,
+	ENABLED /.32./,
+
+
+	// Boolean vrijednost uvjeta u upravljackim naredbama
+	// (za varijablu condition)
+	FALSE/.1./,
+	TRUE /.1./,
+
+	
+
+	///////////////////////
+	// POMOCNE:
+	///////////////////////
+
+	alu_src1/.32./,
+	alu_src2/.32./,
+	alu_res/.32./,
+	alu_flags/.32./,
+
+	instruction_type/.2./, 	// Oznaka tipa dohvacene naredbe
+	op_code/.5./, 			// Operacijski kod naredbe
+
+	condition/.1./,	// Oznaka je li uvjet naredbe istinit
+	tmp/.32./,
+
+
+	///////////////////////
+	// ZASTAVICE ZA STANJE
+	// PREKIDA I PIPELINA:
+	///////////////////////
+
+	FETCH_stage/.32./,	// Oznake omogucenosti/onemogucenosti za
+	EXEC_stage /.32./,	// razine FETCH i EXEC u pipelineu.
+
+	nmi_pending/.1./,	//  nm-interrupt ceka?
+	mi_pending/.1./,	//  m-interrupt ceka?
+	fetched/.1./,		//  da li je dohvacena instrukcija?
+	dma_executed/.1./,	//  da li se desio dma prijenos?
+
+	/////////////////////////////////////////////////////////////
+	// Za provjeru ispravnosti redoslijeda pokretanja: init, run
+	/////////////////////////////////////////////////////////////
+
+	initialized/.32./;
+}
+
+pins {
+	A/.32./,		// adresna sabirnica
+	D/.32./,		// data sabirnica
+
+	RESET,
+	READ, WRITE,
+	SIZE/.2./,
+	WAIT,
+	BREQ, BACK,		// DMA
+	INT3, IACK,		// interrupt nmi
+	INT0, INT1, INT2;	// interrupt mi
+}
+
+
+init {
+
+	///////////////////////
+	// KONSTANTE:
+	///////////////////////
+
+
+	// Sirina pristupa memoriji (za prikljucak SIZE)
+
+	let NONE		= %b 00;
+	let BYTE		= %b 01;
+	let HALFWORD	= %b 10;
+	let WORD		= %b 11;
+
+
+	// Vrste naredaba (za varijablu instruction_type)
+
+	let ALU_instr	= 0;
+	let CTRL_instr	= 1;
+	let MEM_instr	= 2;	
+	let REG_instr	= 3;
+
+
+	// Strojni kodovi naredaba (za razna dekodiranja)
+
+	let OR_opcode	=  %B 00001;
+	let AND_opcode	=  %B 00010;
+	let XOR_opcode	=  %B 00011;
+	let ADD_opcode	=  %B 00100;
+	let ADC_opcode	=  %B 00101;
+	let SUB_opcode	=  %B 00110;
+	let SBC_opcode	=  %B 00111;
+	let ROTL_opcode	=  %B 01000;
+	let ROTR_opcode	=  %B 01001;
+	let SHL_opcode	=  %B 01010;
+	let SHR_opcode	=  %B 01011;
+	let ASHR_opcode	=  %B 01100;
+	let CMP_opcode	=  %B 01101;
+	// let _opcode	=  %B 01110;   // Not used
+	// let _opcode	=  %B 01111;   // Not used
+
+	let MOVE_opcode	=  %B 00000;
+
+	let JP_opcode	=  %B 11000;
+	let CALL_opcode	=  %B 11001;
+	let JR_opcode	=  %B 11010;
+	let RET_opcode	=  %B 11011;
+	let HALT_opcode	=  %B 11111;
+
+	let LOAD_opcode		=  %B 10110;
+	let STORE_opcode	=  %B 10111;
+	let LOADB_opcode	=  %B 10010;
+	let STOREB_opcode	=  %B 10011;
+	let LOADH_opcode	=  %B 10100;
+	let STOREH_opcode	=  %B 10101;
+	let POP_opcode		=  %B 10000;
+	let PUSH_opcode		=  %B 10001;
+
+
+	// O(ne)mogucenost razine pipelinea (za varijable FETCH i EXEC)
+	let DISABLED = 1;
+	let ENABLED  = 0;
+
+
+	// Boolean vrijednost uvjeta u upravljackim naredbama
+	// (za varijablu condition)
+	let FALSE = 0;
+	let TRUE  = 1;
+
+
+
+	///////////////////////
+	// STANJE PROCESORA:
+	///////////////////////
+
+	let IIF = 1;
+	let PC = 0;
+
+	let R[0] = 0;
+	let R[1] = 0;
+	let R[2] = 0;
+	let R[3] = 0;
+	let R[4] = 0;
+	let R[5] = 0;
+	let R[6] = 0;
+	let R[7] = 0;
+
+	let SR=0;
+
+	let A=0;
+	disable D;
+
+	let READ=1;
+	let WRITE=1;
+	let SIZE=NONE;
+	disable WAIT;
+
+	disable BREQ;
+	let BACK=1;
+
+	disable RESET;
+
+	disable INT0, INT1, INT2, INT3;
+	let IACK=1;
+
+	let initialized = %H 12345678;
+}
+
+
+
+check_condition {	// ******** PROVJERA UVJETA ZA SKOK *******
+
+	decode( IR/.22..25./ ) {
+		%B 0000: {	// **** Unconditional	TRUE
+			let condition=1;
+		}
+		%B 0001: {	// ******** N,M			N=1
+			let condition=SR/.0./;
+		}
+		%B 0010: {	// ******** NN,P		N=0
+			not( SR/.0./, condition );
+		}
+		%B 0011: {	// ******** C,ULT		C=1
+			let condition=SR/.1./;
+		}
+		%B 0100: {	// ******** NC,UGE		C=0
+			not( SR/.1./, condition );
+		}
+		%B 0101: {	// ******** V			V=1
+			let condition=SR/.2./;
+		}
+		%B 0110: {	// ******** NV			V=0
+			not( SR/.2./, condition );
+		}
+		%B 0111: {	// ******** Z,EQ		Z=1
+			let condition=SR/.3./;
+		}
+		%B 1000: {	// ******** NZ,NE		Z=0
+			not( SR/.3./, condition );
+		}
+		%B 1001: {	// ******** ULE			C=1 ili Z=1
+			or( SR/.1./, SR/.3./, condition );
+		}
+		%B 1010: {	// ******** UGT			C=0 i Z=0
+			nor( SR/.1./, SR/.3./, condition );
+		}
+		%B 1011: {	// ******** SLT			(N xor V)=1
+			xor( SR/.0./, SR/.2./, condition );
+		}
+		%B 1100: {	// ******** SLE		(N xor V)=1 ili Z=1
+			xor( SR/.0./, SR/.2./, condition );
+			or( condition, SR/.3./, condition );
+		}
+		%B 1101: {	// ******** SGE			(N xor V)=0
+			nxor( SR/.0./, SR/.2./, condition );
+		}
+		%B 1110: {	// ******** SGT		(N xor V)=0 i Z=0
+			xor( SR/.0./, SR/.2./, condition );
+			nor( condition, SR/.3./, condition );
+		}
+	}
+}
+
+
+
+ispis_registara {
+	print( "----------------------------------------------------", / );
+
+	print( " R0=",%8.h R[0], "  R1=",%8.h R[1] );
+	print( "            210G210ZVCN", / );
+
+	print( " R2=",%8.h R[2], "  R3=",%8.h R[3] );
+	print( "         SR=", %1.b INT2, %1.b INT1, %1.b INT0, %8.b SR, / );
+
+	print( " R4=",%8.h R[4], "  R5=",%8.h R[5], / );
+
+	print( " R6=",%8.h R[6], "  R7=",%8.h R[7] );
+	print( "      PC=", %8.h PC, "    IIF=", %1.b IIF, / );
+
+	print( "----------------------------------------------------", / );
+}
+
+
+
+
+REG_ispis {
+
+	print( "MOVE " );
+
+
+	// PRINT source
+	if( IR/.21./ = 1 ) {
+		print( "SR, " );
+	} else {
+		if( IR/.26./ = 0 ) {
+			print( "R", %1.u IR/.17..19./, ", " );
+		} else {
+			let tmp = (signed) IR/.0..19./;
+			if (IR/.19./=0) {
+				print( %8.h tmp, ", " );
+			} else {
+				neg( tmp, tmp );	//immediate je negativan
+				print ( "-", %8.h tmp, ", " );
+			}
+		}
+	}
+
+	// PRINT destination
+	if( IR/.20./ = 1 ) {
+		print( "SR", / );
+	} else {
+		print( "R", %1.u IR/.23..25./, / );
+	}
+}
+
+
+
+ALU_ispis {
+
+	let op_code = IR/.27..31./;
+
+	if( op_code == SBC_opcode ) {
+		print( "SBC" );
+
+	} else if( op_code == ADD_opcode ) {
+		print( "ADD" );
+
+	} else if( op_code == SUB_opcode ) {
+		print( "SUB" );
+
+	} else if( op_code == ADC_opcode ) {
+		print( "ADC" );
+
+	} else if( op_code == AND_opcode ) {
+		print( "AND" );
+
+	} else if( op_code == XOR_opcode ) {
+		print( "XOR" );
+
+	} else if( op_code == OR_opcode ) {
+		print( "OR" );
+
+	} else if( op_code == ROTL_opcode ) {
+		print( "ROTL" );
+
+	} else if( op_code == ROTR_opcode ) {
+		print( "ROTR" );
+
+	} else if( op_code == SHL_opcode ) {
+		print( "SHL" );
+
+	} else if( op_code == SHR_opcode ) {
+		print( "SHR" );
+
+	} else if( op_code == ASHR_opcode ) {
+		print( "ASHR" );
+
+	} else if( op_code == CMP_opcode ) {
+		print( "CMP" );
+	}
+
+	print ( " R", %1.u IR/.20..22./, ", " ); // source1
+
+	if ( IR/.26./ = 0 ) {	//da li je source2 registar ili immediate
+		print( "R", %1.u IR/.17..19./ );
+	} else {
+		if (IR/.19./=0) {
+			print( %8.h alu_src2 );
+		} else {
+			neg( alu_src2, tmp );	//immediate je negativan
+			print ( "-", %8.h tmp );
+		}
+	}
+
+	if ( op_code == CMP_opcode ) {
+		print( / );	//za CMP nema destination registra
+	} else {
+		print ( ", R", %1.u IR/.23..25./, / );
+	}
+}
+
+
+
+ispis_uvjeta {
+	switch (IR/.22..25./) {
+		//0:  print ( "" );
+		1:  print ( "_N/M" );
+		2:  print ( "_NN/P" );
+		3:  print ( "_C/ULT" );
+		4:  print ( "_NC/UGE" );
+		5:  print ( "_V" );
+		6:  print ( "_NV" );
+		7:  print ( "_Z/EQ" );
+		8:  print ( "_NZ/NE" );
+		9:  print ( "_ULE" );
+		10: print ( "_UGT" );
+		11: print ( "_SLT" );
+		12: print ( "_SLE" );
+		13: print ( "_SGE" );
+		14: print ( "_SGT" );
+	}
+}
+
+
+CTRL_ispis {
+
+	let op_code = IR/.27..31./;
+
+	if( op_code == RET_opcode ) {
+		print( "RET" );
+		if( IR/.0./=1  and  IR/.1./=0 ) print( "I" );
+		if( IR/.0./=1  and  IR/.1./=1 ) print( "N" );
+		call ispis_uvjeta;
+		print ( / );
+
+	} else if( op_code == JR_opcode ) {
+		print( "JR" );
+		call ispis_uvjeta;
+		if( IR/.19./ == 0 ) {
+			print( " +", %6.H IR/.0..18./ );
+		} else {
+			neg( (signed) IR/.0..19./, tmp );
+			print( " -", %6.H tmp );
+		}
+		add( PC, (signed) IR/.0..19./, tmp );
+		let tmp/.0..1./ = 0;
+		print( "  ->  ", %8.H tmp, / );
+
+	} else if( op_code == CALL_opcode ) {
+		print( "CALL");
+		call ispis_uvjeta;
+		if (IR/.26./ = 0) {
+			print ( " (R", %1.u IR/.17..19./, ")", / );
+		} else {
+			let tmp = (signed) IR/.0..19./;
+			let tmp/.0..1./ = 0;
+			print ( " ", %8.H tmp, / );
+		}
+
+	} else if( op_code == JP_opcode ) {
+		print( "JP" );
+		call ispis_uvjeta;
+		if (IR/.26./ = 0) {
+			print ( " (R", %1.u IR/.17..19./, ")", / );
+		} else {
+			let tmp = (signed) IR/.0..19./;
+			let tmp/.0..1./ = 0;
+			print ( " ", %8.H tmp, / );
+		}
+
+	} else if( op_code == HALT_opcode ) {
+		print( "HALT" );
+		call ispis_uvjeta;
+		print ( / );
+	}
+}
+
+
+MEM_ispis {
+
+	let op_code = IR/.27..31./;
+
+	if( op_code == LOAD_opcode ) {
+		print( "LOAD" );
+
+	} else if( op_code == STORE_opcode ) {
+		print( "STORE" );
+
+	} else if( op_code == LOADB_opcode ) {
+		print( "LOADB" );
+
+	} else if( op_code == STOREB_opcode ) {
+		print( "STOREB" );
+
+	} else if( op_code == LOADH_opcode ) {
+		print( "LOADH" );
+
+	} else if( op_code == STOREH_opcode ) {
+		print( "STOREH" );
+
+	} else if( op_code == PUSH_opcode ) {
+		print( "PUSH" );
+		print(" R", %1.u IR/.23..25./, / );
+		return;
+
+	} else if( op_code == POP_opcode ) {
+		print( "POP" );
+		print(" R", %1.u IR/.23..25./, / );
+		return;
+	}
+
+	/////// Ispis operanada za LOAD/STORE //////////////////
+
+	/////// Prvi operand //////////// //////////////////////
+	print( " R", %1.u IR/.23..25./ );
+
+	/////// Drugi operand //////////////////////////////////
+	if (IR/.26./ = 0 ) {
+		/////// (APSOLUTNA_ADRESA) /////////////////////////
+		print( ", (", %8.H (signed) IR/.0..19./, ")", /);
+
+	} else {
+		/////// (REGISTARSKO_INDIREKTNO_S_ODMAKOM) /////////
+		print( ", (R", %1.u IR/.20..22./ );
+		if( IR/.19./ == 0 ) {
+			print( " +", %6.H IR/.0..18./ );
+		} else {
+			neg( (signed) IR/.0..19./, tmp );
+			print( " -", %6.H tmp );
+		}
+		print( ")", / );
+	}
+}
+
+
+
+ispis_naredbe {
+
+	if ( instruction_type == ALU_instr ) {
+		call ALU_ispis;
+		return;
+	}
+
+	if ( instruction_type == CTRL_instr ) {
+		call CTRL_ispis;
+		return;
+	}
+
+	if ( instruction_type == MEM_instr ) {
+		call MEM_ispis;
+		return;
+	}
+
+	if ( instruction_type == REG_instr ) {
+		call REG_ispis;
+		return;
+	}
+}
+
+
+
+dekodiraj {
+	
+
+	let op_code = IR/.27..31./;
+
+	if( op_code >>= OR_opcode  and  op_code <<= CMP_opcode ) {
+		let instruction_type = ALU_instr;
+
+	} else if( op_code == MOVE_opcode ) {
+		let instruction_type = REG_instr;
+
+	} else if( op_code >>= POP_opcode  and  op_code <<= STORE_opcode ) {
+		let instruction_type = MEM_instr;
+
+	} else if( op_code >>= JP_opcode  and  op_code <<= RET_opcode ) {
+		let instruction_type = CTRL_instr;
+
+	} else if( op_code == HALT_opcode ) {
+		let instruction_type = CTRL_instr;
+
+	} else {
+		print( "Nepostojeca instrukcija", / ); 
+		exit; 
+	}
+}
+
+
+
+fetch_rise {
+
+	let AR = PC;
+	let A = AR;
+	disable D;
+	let READ = 0;
+	let SIZE = WORD;
+}
+
+
+
+exec_rise {
+
+	trace.1 {
+		call ispis_registara;
+	}
+
+	trace.2 {
+		call ispis_naredbe;
+	}
+
+	trace.3 {
+		waitkey;
+	}
+
+	let op_code = IR/.27..31./;
+
+	/////////////////////////////////////////////
+	/////////// UPRAVLJACKE NAREDBE
+	/////////////////////////////////////////////
+
+	if( instruction_type == CTRL_instr ) {
+
+		if( condition == FALSE ) {
+			return;
+		}
+
+		if( op_code == RET_opcode ) {
+			let AR = R[7];
+			let AR/.0..1./ = 0;
+			let A = AR;
+			disable D;
+			let READ = 0;
+			let SIZE = WORD;
+
+		} else if( op_code == CALL_opcode ) {
+			sub( R[7], 4, R[7] );
+			let AR = R[7];
+			let AR/.0..1./ = 0;
+			let DR = PC;
+			let A = AR;
+			let D = DR;
+			let WRITE = 0;
+			let SIZE = WORD;
+
+		} else if( op_code == JR_opcode ) {
+			// Ne radi ovdje nista
+
+		} else if( op_code == JP_opcode ) {
+			// Ne radi ovdje nista
+
+		} else if( op_code == HALT_opcode ) {
+			// Ne radi ovdje nista
+		}
+		return;
+	}
+
+
+	/////////////////////////////////////////////
+	/////////// ALU NAREDBE
+	/////////////////////////////////////////////
+
+	if( instruction_type == ALU_instr ) {
+
+		if( op_code == SBC_opcode ) {
+			not(SR/.1./,flagc);		// C=-C
+			subcf(alu_src1, alu_src2, alu_res);
+			let alu_flags/.0./ = flags;
+			not( flagc, alu_flags/.1./ );
+			let alu_flags/.2./ = flago;
+			let alu_flags/.3./ = flagz;
+
+		} else if( op_code == ADD_opcode ) {
+			addf(alu_src1, alu_src2, alu_res);
+			let alu_flags/.0./ = flags;
+			let alu_flags/.1./ = flagc;
+			let alu_flags/.2./ = flago;
+			let alu_flags/.3./ = flagz;
+
+		} else if( op_code == SUB_opcode ) {
+			subf(alu_src1, alu_src2, alu_res);
+			let alu_flags/.0./ = flags;
+			not( flagc, alu_flags/.1./ );
+			let alu_flags/.2./ = flago;
+			let alu_flags/.3./ = flagz;
+
+		} else if( op_code == ADC_opcode ) {
+			let flagc = SR/.1./;
+			addcf(alu_src1, alu_src2, alu_res);
+			let alu_flags/.0./ = flags;
+			let alu_flags/.1./ = flagc;
+			let alu_flags/.2./ = flago;
+			let alu_flags/.3./ = flagz;
+
+		} else if( op_code == AND_opcode ) {
+			andf(alu_src1, alu_src2, alu_res);
+			let alu_flags/.0./ = flags;
+			let alu_flags/.1./ = 0;
+			let alu_flags/.2./ = 0;
+			let alu_flags/.3./ = flagz;
+
+		} else if( op_code == XOR_opcode ) {
+			xorf(alu_src1, alu_src2, alu_res);
+			let alu_flags/.0./ = flags;
+			let alu_flags/.1./ = 0;
+			let alu_flags/.2./ = 0;
+			let alu_flags/.3./ = flagz;
+
+		} else if( op_code == OR_opcode ) {
+			orf(alu_src1, alu_src2, alu_res);
+			let alu_flags/.0./ = flags;
+			let alu_flags/.1./ = 0;
+			let alu_flags/.2./ = 0;
+			let alu_flags/.3./ = flagz;
+
+		} else if( op_code == ROTL_opcode ) {
+			shiftlhf(alu_src1, alu_src2/.0..4./, alu_res);
+			let alu_flags/.0./ = flags;
+			let alu_flags/.1./ = flagx;
+			let alu_flags/.2./ = 0;
+			let alu_flags/.3./ = flagz;
+
+		} else if( op_code == ROTR_opcode ) {
+			shiftrlf(alu_src1, alu_src2/.0..4./, alu_res);
+			let alu_flags/.0./ = flags;
+			let alu_flags/.1./ = flagx;
+			let alu_flags/.2./ = 0;
+			let alu_flags/.3./ = flagz;
+			
+		} else if( op_code == SHL_opcode ) {
+			shiftl0f(alu_src1, alu_src2/.0..4./, alu_res);
+			let alu_flags/.0./ = flags;
+			let alu_flags/.1./ = flagx;
+			let alu_flags/.2./ = 0;
+			let alu_flags/.3./ = flagz;
+			
+		} else if( op_code == SHR_opcode ) {
+			shiftr0f(alu_src1, alu_src2/.0..4./, alu_res);
+			let alu_flags/.0./ = flags;
+			let alu_flags/.1./ = flagx;
+			let alu_flags/.2./ = 0;
+			let alu_flags/.3./ = flagz;
+
+		} else if( op_code == ASHR_opcode ) {
+			shiftrhf(alu_src1, alu_src2/.0..4./, alu_res);
+			let alu_flags/.0./ = flags;
+			let alu_flags/.1./ = flagx;
+			let alu_flags/.2./ = 0;
+			let alu_flags/.3./ = flagz;
+
+		} else if( op_code == CMP_opcode ) {
+			subf(alu_src1, alu_src2, alu_res);
+			let alu_flags/.0./ = flags;
+			not( flagc, alu_flags/.1./ );
+			let alu_flags/.2./ = flago;
+			let alu_flags/.3./ = flagz;
+		}
+		return;
+	}
+
+
+	/////////////////////////////////////////////
+	/////////// REGISTARSKE NAREDBE
+	/////////////////////////////////////////////
+
+	if( op_code == MOVE_opcode ) {
+		// Ne radi ovdje nista
+		return;
+	}
+
+
+	/////////////////////////////////////////////
+	/////////// MEMORIJSKE NAREDBE
+	/////////////////////////////////////////////
+
+	if( op_code >>= LOADB_opcode  and  op_code <<= STORE_opcode ) {
+	////// SVE LOAD i STORE NAREDBE
+
+
+		////// Odredi adresu za LOAD/STORE
+		if( IR/.26./ == 0 ) {
+			//// (APSOLUTNA ADRESA)
+			let AR = (signed) IR/.0..19./;
+
+		} else {
+			//// (REGISTAR+OFSET)
+			add( R[IR/.20..22./], (signed) IR/.0..19./, AR );
+		}
+
+
+		///// Podesi adresu za HALFWORD i WORD
+		if( IR/.28..29./ == %B 11 ) {
+			//// WORD
+			let AR/.0..1./ = 0;
+
+		} else if( IR/.28..29./ == %B 10 ) {
+			//// HALFWORD
+			let AR/.0./ = 0;
+		} 
+
+
+		/////  Je li LOAD ili STORE?
+		if( IR/.27./ == 0 ) {
+			////////////////////  LOAD
+			let A = AR;
+			disable D;
+			let READ = 0;
+			let SIZE = IR/.28..29./;
+
+		} else {
+			////////////////////  STORE
+
+			///// Pomakni podatak na pravu poziciju bajta ili polurijeci.
+			///// Na ostalim pozicijama u rijeci ostaje "smece".
+			let DR = R[ IR/.23..25./ ];
+			let tmp = 0;
+			let tmp/.3..4./ = AR/.0..1./;
+			shiftlh( DR, tmp, DR );
+
+			let A = AR;
+			let D = DR;
+			let WRITE = 0;
+			let SIZE = IR/.28..29./;
+		}
+
+	} else if( op_code == PUSH_opcode ) {
+		sub( R[7], 4, R[7] );
+		let AR = R[7];
+		let AR/.0..1./ = 0;
+		let DR = R[ IR/.23..25./ ];
+		let A = AR;
+		let D = DR;
+		let WRITE = 0;
+		let SIZE = WORD;
+
+	} else if( op_code == POP_opcode ) {
+		let AR = R[7];
+		let AR/.0..1./ = 0;
+		let A = AR;
+		disable D;
+		let READ = 0;
+		let SIZE = WORD;
+	}
+}
+
+
+
+fetch_1_fall {
+
+	brkpt PC;
+	add( PC, 4, PC );
+	let PC/.0..1./ = 0;
+
+	wait( fall( clock )  and  WAIT == 1 );
+
+	let DR = D;
+	let READ = 1;
+	let SIZE = NONE;
+}
+
+
+exec_fall {
+
+	let op_code = IR/.27..31./;
+
+	/////////////////////////////////////////////
+	/////////// ALU NAREDBE
+	/////////////////////////////////////////////
+
+	if( instruction_type==ALU_instr ) {
+
+		let SR/.0..3./ = alu_flags/.0..3./;
+		if( op_code !== CMP_opcode ) { // sve osim CMP
+			let R[IR/.23..25./] = alu_res;
+		}
+		return;
+	}
+
+
+	/////////////////////////////////////////////
+	/////////// UPRAVLJACKE NAREDBE
+	/////////////////////////////////////////////
+
+	if( instruction_type==CTRL_instr ) {
+
+		/// Ako je uvjet lazan, nema se sto izvoditi
+		if( condition == FALSE ) {
+			return;
+		}
+
+		if( op_code == RET_opcode ) {
+
+			wait( fall( clock )  and  WAIT == 1 );
+			let DR = D;
+			let READ = 1;
+			let SIZE = NONE;
+			add ( R[7], 4, R[7] );
+			let PC = DR;
+			let PC/.0..1./ = 0;
+			if( IR/.0./ = 1 ) {
+			if (IR/.1./ = 0) {
+					let SR/.7./ = 1; // ******** RETI
+				} else {
+					let IIF =1; // ******** RETN
+				}
+			}
+
+		} else if( op_code == CALL_opcode ) {
+
+			wait( fall( clock )  and  WAIT == 1 );
+			let WRITE = 1;
+			let SIZE = NONE;
+			if( IR/.26./ = 0 ) {
+				let PC = R[IR/.17..19./];
+			} else {
+				let PC = (signed) IR/.0..19./;
+			}
+			let PC/.0..1./ = 0;
+
+		} else if( op_code == JR_opcode ) {
+
+			add( PC, (signed) IR/.0..19./, PC );
+			let PC/.0..1./ = 0;
+
+
+		} else if( op_code == JP_opcode ) {
+
+			if( IR/.26./ = 0 ) {
+				let PC = R[IR/.17..19./];
+			} else {
+				let PC = (signed) IR/.0..19./;
+			}
+			let PC/.0..1./ = 0;
+
+		} else if( op_code == HALT_opcode ) {
+
+			print("processor halted.", /); 
+			exit;
+
+		}
+		return;
+	}
+
+
+	/////////////////////////////////////////////
+	/////////// REGISTARSKE NAREDBE
+	/////////////////////////////////////////////
+
+	if( op_code == MOVE_opcode ) {
+
+		// write to destination
+		if( IR/.20./ = 1 ) {
+			let SR = alu_src2;
+		} else {
+			let R[ IR/.23..25./ ] = alu_src2;
+		}
+		return;
+	}
+
+
+	/////////////////////////////////////////////
+	/////////// MEMORIJSKE NAREDBE
+	/////////////////////////////////////////////
+
+	if( op_code >>= LOADB_opcode  and  op_code <<= STORE_opcode ) {
+
+	////// SVE LOAD i STORE NAREDBE
+
+		/////  Je li LOAD ili STORE?
+		if( IR/.27./ == 0 ) {
+			////////////////////  LOAD
+
+			wait( fall( clock )  and  WAIT == 1 );
+			let DR = D;
+			let READ = 1;
+			let SIZE = NONE;
+
+			///// Pomakni podatak na pravu poziciju bajta ili polurijeci.
+			///// Na ostalim pozicijama u procitanoj rijeci je "smece".
+
+			let tmp = 0;
+			let tmp/.3..4./ = AR/.0..1./;
+			shiftrh( DR, tmp, DR );
+
+			////// Brisanje "smeca" za BAJTOVE i POLURIJECI
+			if( IR/.28..29./ = %B 01 ) {
+				////// BAJT
+				let DR/.8..31./ = 0;
+
+			} else if( IR/.28..29./ = %B 10 ) {
+				////// POLURIJEC
+				let DR/.16..31./ = 0;
+			}
+			let R[IR/.23..25./]=DR;
+
+		} else {
+			////////////////////  STORE
+
+			wait( fall( clock )  and  WAIT == 1 );
+			let WRITE = 1;
+			let SIZE = NONE;
+		}
+
+
+	} else if( op_code == PUSH_opcode ) {
+
+		wait( fall( clock )  and  WAIT == 1 );
+		let WRITE = 1;
+		let SIZE = NONE;
+
+	} else if( op_code == POP_opcode ) {
+
+		wait( fall( clock )  and  WAIT == 1 );
+		let DR = D;
+		let READ = 1;
+		let SIZE = NONE;
+		add ( R[7], 4, R[7] );
+		let R[IR/.23..25./]=DR;
+
+	}
+}
+
+
+
+fetch_2_fall {
+
+	let IR = DR;
+	call dekodiraj;  // odredi tip naredbe
+
+
+	/////////////////////////////////////////////
+	/////////// ALU NAREDBE
+	/////////////////////////////////////////////
+
+	if( instruction_type==ALU_instr ) {	// Za ALU-naredbe
+
+		// dohvati operande u alu
+
+		let alu_src1 = R[ IR/.20..22./ ];
+
+		if( IR/.26./ = 0 ) {
+			let alu_src2 = R[ IR/.17..19./ ];
+		} else {
+			let alu_src2 = (signed) IR/.0..19./;
+		}
+
+		return;
+	}
+
+
+	/////////////////////////////////////////////
+	/////////// UPRAVLJACKE NAREDBE
+	/////////////////////////////////////////////
+
+	if ( instruction_type==CTRL_instr ) {
+
+		call check_condition;
+		return;
+	}
+
+
+	/////////////////////////////////////////////
+	/////////// MEMORIJSKE NAREDBE
+	/////////////////////////////////////////////
+
+	if ( instruction_type==MEM_instr ) {
+
+		// Ovdje ne radi nista
+		return;
+	}
+
+
+	/////////////////////////////////////////////
+	/////////// REGISTARSKE NAREDBE
+	/////////////////////////////////////////////
+
+	if ( instruction_type==REG_instr ) {
+
+		// calculate source
+		if( IR/.21./ = 1 ) {
+			let alu_src2 = SR;
+			let alu_src2 /.8./ = INT0;
+			let alu_src2 /.9./ = INT1;
+			let alu_src2 /.10./ = INT2;
+		} else {
+			if( IR/.26./ = 0 ) {
+				let alu_src2 = R[ IR/.17..19./ ];
+			} else {
+				let alu_src2 = (signed) IR/.0..19./;
+			}
+		}
+		return;
+	}
+}
+
+
+
+test_int { // da li je postavljen interrupt?
+	let nmi_pending = 0;
+	let mi_pending = 0;
+
+	if (IIF = 0) {
+		return;
+	}
+
+	if (INT3 = 0) {
+		let nmi_pending = 1;
+		return;
+	}
+
+	if (SR/.7./ = 0) { // GIE
+		return;
+	}
+
+	if( (SR/.4./ = 1 and INT0 = 0) or
+		(SR/.5./ = 1 and INT1 = 0) or
+		(SR/.6./ = 1 and INT2 = 0) ) {
+		let mi_pending = 1;
+		return;
+	}
+}
+
+
+
+
+push_pc {
+
+	on(rise(clock));
+	// PC -> stog
+	sub( R[7], 4, R[7] );
+	let AR = R[7];
+	let AR/.0..1./ = 0;
+	let DR = PC;
+	let A = AR;
+	let D = DR;
+	let WRITE = 0;
+	let SIZE = WORD;
+
+	wait( fall( clock )  and  WAIT == 1 );
+	let WRITE = 1;
+	let SIZE = NONE;
+}
+
+
+
+
+
+handle_interrupt {
+
+	call test_int;
+	if ( nmi_pending = 0 and mi_pending = 0 ) { // nema int-a
+		return;
+	}
+
+	if (fetched = 1) {
+
+		if (IR/.31./ = 1) {		// dohvacena 2ciklusna
+			return;				//  -> izvrsi je do kraja
+
+		} else {				// dohvacena 1ciklusna
+			sub(PC, 4, PC);		//  -> zaboravi je
+		}
+	}
+
+
+	if ( nmi_pending = 1 ) {
+		trace.4 {
+			print("Prihvacen non-maskable interrupt", /);
+		}
+		let IACK = 0;
+		let IIF = 0;
+		call push_pc;	
+		let IACK = 1;
+		let PC = 12;	// 12 je adresa za nonmaskable potprogram
+	}
+
+
+	if ( mi_pending = 1 ) {
+		trace.4	{
+			print("Prihvacen maskable interrupt", /);
+		}
+		let SR/.7./ = 0; // GIE = 0
+		call push_pc;
+
+		// PC <- (8)
+		on(rise(clock));
+		let AR = 8;	// 8 je adresa za nonmaskable potprogram
+		let A = AR;
+		disable D;
+		let READ = 0;
+		let SIZE = WORD;
+
+		wait( fall( clock )  and  WAIT == 1 );
+		let DR = D;
+		let READ = 1;
+		let SIZE = NONE;
+		let PC = DR;
+		let PC/.0..1./ = 0;
+	}
+
+
+	// dohvati prvu instrukciju prekidnog
+	let FETCH_stage = ENABLED;
+	let EXEC_stage = DISABLED;
+	return;
+}
+
+
+
+handle_dma {
+
+	// trenutno je fall(clock)
+	let dma_executed = 0;
+	if (BREQ = 1) {
+		return;
+	}
+
+	// potvrdi na sljedeci rise(clock)
+	on( rise(clock) );
+	disable A;
+	disable D;
+	disable READ;
+	disable WRITE;
+	disable SIZE;
+	let BACK = 0;
+
+	// provjeri BREQ na fall(clock)
+	wait( fall(clock) and BREQ = 1 );
+	let READ = 1;
+	let WRITE =1;
+	let SIZE = NONE;
+	// podigi BACK na sljedeci rise(clock)
+	let dma_executed = 1;
+}
+
+
+
+run {
+
+	///////////////////////////////////////////////////
+	// Provjera je li izveden init prije run
+	///////////////////////////////////////////////////
+	
+	if( initialized !== %H 12345678 ) {
+		print( /, /, "============================================" );
+		print( /, /, "Morate napraviti inicijalizaciju pomocu init" );
+		print( /, "prije pokretanja simulacije sa run", /, / );
+		print( "============================================", /, / );
+		exit;
+	}
+	let initialized = %H ABCDEF01;
+
+	///////////////////////////////////////////////////
+	// Pocetak simulacije
+	///////////////////////////////////////////////////
+
+	let FETCH_stage = ENABLED;     // Na pocetku se radi dohvat,
+	let EXEC_stage  = DISABLED;    // ali se jos nema sto izvesti.
+
+	forever {
+
+		on( rise( clock ) );
+		if( dma_executed = 1) {
+			let BACK = 1;
+		}
+		if( FETCH_stage = ENABLED ) {
+			call fetch_rise;
+		}
+
+		if( EXEC_stage = ENABLED ) {
+			call exec_rise;
+		}
+
+
+		on( fall( clock ) );
+		if( FETCH_stage = ENABLED ) {
+			call fetch_1_fall;
+		}
+		if( EXEC_stage = ENABLED ) {
+			call exec_fall;
+		}
+		not( FETCH_stage, fetched);
+		// fetched = da li je dohvacena instrukcija
+		//  provjerava se u handle_interrupt
+		//  (ne moze se koristiti FETCH_stage
+		//   jer se on mijenja u donjoj if naredbi)
+		if ( FETCH_stage = ENABLED ) {
+			call fetch_2_fall;
+			
+			if (IR/.31./ = 1){ // dvociklusna instrukcija
+				let FETCH_stage = DISABLED;
+			}
+
+			// nesto smo dohvatili:
+			//  -> izvrsi to u sljedecem ciklusu
+			let EXEC_stage = ENABLED;
+
+		} else {
+			// fetch je bio onemogucen:
+			//  - omoguci ga za sljedeci ciklus
+			//  - nista nismo dohvatili 
+			//  -> onemoguci exec za sljedeci ciklus
+
+			let FETCH_stage = ENABLED;
+			let EXEC_stage = DISABLED;
+		}
+
+		call handle_dma;
+
+		// ako se dma desio nalazimo se na rise(clock)
+		// a handle interrupt ocekuje fall(clock)
+		if (dma_executed = 0) {
+			call handle_interrupt;
+		}
+
+	} // end forever
+}
+

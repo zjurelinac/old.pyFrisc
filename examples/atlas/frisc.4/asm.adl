@@ -1,0 +1,373 @@
+4 memory word/line;
+comment ";";
+base "%h";
+memory word /.8./;
+code align 4;
+PC /.32./;
+separators ",+-().";
+integers
+	unsigned_19 +/.19./,
+	unsigned_32 +/.32./,
+	signed_20   -/.20./,
+
+    WORD/.32./,
+    HALF/.16./,
+    BYTE/.8./,
+
+
+
+         lohi32 /.32./,
+         adr32 +/.32./, adr18 +/.18./,
+         sr8 +/.8./,
+         poff18 +/.18./, noff19 -/.19./;
+
+
+
+	index ri/.3./;
+
+replacements {
+
+    //////////////////////////////////////////////////////////////////
+    // Operacijski kodovi naredaba
+    //////////////////////////////////////////////////////////////////
+
+    ALU_instr {
+    
+        // "MOVE" = ,00000,
+	
+        "OR"    =  ,00001,
+        "AND"   =  ,00010,
+        "XOR"   =  ,00011,
+
+        "ADD"   =  ,00100,
+        "ADC"   =  ,00101,
+        "SUB"   =  ,00110,
+        "SBC"   =  ,00111,
+
+        "ROTL"  =  ,01000,
+        "ROTR"  =  ,01001,
+        "SHL"   =  ,01010,
+        "SHR"   =  ,01011,
+	"ASHR"  =  ,01100,
+
+        //"CMP" =  ,01101,     // zbog 2 operanda se definira zasebno
+        //""    =  ,01110,     // Nije iskoristeno
+        //""    =  ,01111,     // Nije iskoristeno
+    }
+
+    MEM_instr {
+        "LOADB"  =  ,10010,
+        "STOREB" =  ,10011,
+        "LOADH"  =  ,10100,
+        "STOREH" =  ,10101,
+        "LOAD"   =  ,10110,
+        "STORE"  =  ,10111,
+    }
+
+    STACK_instr {
+        "PUSH"  =  ,10001,
+        "POP"   =  ,10000,
+    }
+
+    CTRL_instr {
+        "JP"    =  ,11000,
+        "CALL"  =  ,11001,
+    }
+
+
+    //////////////////////////////////////////////////////////////////
+    // Opci registri R0 do R7  (i SP kao sinonim za R7)
+    //////////////////////////////////////////////////////////////////
+
+    src1, src2 {
+        "R`ri`"    =    ,ri,
+        "SP"       =    ,111,
+    }
+	dest {
+        "R`ri`"    =    ,ri/.1..2./; = ,ri/.0./,
+        "SP"       =    ,11;         = ,1,
+    }
+
+
+
+    //////////////////////////////////////////////////////////////////
+    // 20-bitna predznacno prosirena adresa:
+    // mora biti pozitivan broj:
+    //    ili najnizih 2^19 adresa  ili najvisih 2^19 adresa
+    //////////////////////////////////////////////////////////////////
+
+    address_20 {
+        "`unsigned_19`"  =  ,0, unsigned_19/.16..18./;
+						 =	,unsigned_19/.8..15./;
+						 =	,unsigned_19/.0..7./;
+        "`unsigned_32`"  =  ,1, +/.20./ (unsigned_32-4294443008) /.16..18./;
+        				 =	,+/.20./ (unsigned_32-4294443008) /.8..15./;
+        				 =	,+/.20./ (unsigned_32-4294443008) /.0..7./;
+    }
+
+
+    //////////////////////////////////////////////////////////////////
+    // 20-bitni predznacno prosireni podatak:
+    // moze biti pozitivan broj
+    //     ili najnizih 2^19 brojeva  ili  najvisih 2^19 brojeva
+    // moze biti negativan broj:
+    //     najnizih 2^19 brojeva s negativnim predznakom
+    //////////////////////////////////////////////////////////////////
+
+    data_20 {
+        "`unsigned_19`"  =  ,0, unsigned_19/.16..18./;
+						 =	,unsigned_19/.8..15./;
+						 =	,unsigned_19/.0..7./;
+        "`unsigned_32`"  =  ,1, +/.20./ (unsigned_32-4294443008) /.16..18./;
+        				 =	,+/.20./ (unsigned_32-4294443008) /.8..15./;
+        				 =	,+/.20./ (unsigned_32-4294443008) /.0..7./;
+        "`signed_20`"    =  ,signed_20/.16..19./;
+						 =	,signed_20/.8..15./;
+						 =	,signed_20/.0..7./;
+    }
+
+
+    //////////////////////////////////////////////////////////////////
+    // Registarsko indirektno s odmakom: za LOAD/STORE (Ri+offset)
+    // odmak moze biti pozitivan broj
+    //     najnizih 2^19 brojeva
+    // odmak moze biti negativan broj:
+    //     najnizih 2^19 brojeva s negativnim predznakom
+    //////////////////////////////////////////////////////////////////
+
+    reg_offset {
+        "`src1`+`unsigned_19`"  =  ,src1, 0, unsigned_19/.16..18./;
+								=  ,unsigned_19/.8..15./;
+								=  ,unsigned_19/.0..7./;
+        "`src1``signed_20`"     =  ,src1, signed_20/.16..19./;
+								=  ,signed_20/.8..15./;
+								=  ,signed_20/.0..7./;
+        "`src1`"                =  ,src1, 0000;
+								=  ,0000,0000;
+								=  ,0000,0000;
+    }
+
+
+    //////////////////////////////////////////////////////////////////
+	// Drugi operand za ALU-naredbe: Ri ili podatak
+    //////////////////////////////////////////////////////////////////
+
+    alu_src2 {
+        "`src2`"      =   ,0,   =  ,src2, 0;
+								=  ,0000,0000;
+								=  ,0000,0000;
+        "`data_20`"   =   ,1,   =  ,data_20[0];
+								=  ,data_20[1];
+								=  ,data_20[2];
+    }
+
+
+    //////////////////////////////////////////////////////////////////
+	// Operandi za naredbu MOVE
+    //////////////////////////////////////////////////////////////////
+
+    move_src {
+        "SR"         =   ,0,   =   ,1,   =   ,000,  0;
+										 =   ,0000, 0000;
+										 =   ,0000, 0000;
+        "`src2`"     =   ,0,   =   ,0,   =   ,src2, 0;
+										 =   ,0000, 0000;
+										 =   ,0000, 0000;
+        "`data_20`"  =   ,1,   =   ,0,   =   ,data_20[0];
+										 =   ,data_20[1];
+										 =   ,data_20[2];
+    }
+
+    move_dest {
+        "SR"      =   ,00;	    =  ,0,         =  ,1,
+        "`dest`"  =   ,dest[0]; =  ,dest[1],   =  ,0,
+    }
+
+
+    //////////////////////////////////////////////////////////////////
+	// Conditon Codes za upravljacke naredbe
+    //////////////////////////////////////////////////////////////////
+
+    cc {
+        "_NN"   =  ,00;  =  ,10,
+        "_NV"   =  ,01;  =  ,10,
+        "_NC"   =  ,01;  =  ,00,
+        "_NE"   =  ,10;  =  ,00,
+        "_NZ"   =  ,10;  =  ,00,
+        "_N"    =  ,00;  =  ,01,
+        "_C"    =  ,00;  =  ,11,
+        "_V"    =  ,01;  =  ,01,
+        "_Z"    =  ,01;  =  ,11,
+        "_M"    =  ,00;  =  ,01,
+        "_P"    =  ,00;  =  ,10,
+        "_EQ"   =  ,01;  =  ,11,
+        "_ULE"  =  ,10;  =  ,01,
+        "_UGT"  =  ,10;  =  ,10,
+        "_SLT"  =  ,10;  =  ,11,
+        "_SLE"  =  ,11;  =  ,00,
+        "_SGE"  =  ,11;  =  ,01,
+        "_SGT"  =  ,11;  =  ,10,
+        "_ULT"  =  ,00;  =  ,11,
+        "_UGE"  =  ,01;  =  ,00,
+        ""      =  ,00;  =  ,00,
+    }
+
+
+
+    //////////////////////////////////////////////////////////////////
+    // Liste podataka za pomocne pseudo-naredbe
+    //////////////////////////////////////////////////////////////////
+
+
+	WORDLIST {
+		"`WORD`,`WORDLIST`" = ;WORD/.0..7./;
+                               WORD/.8..15./;
+                               WORD/.16..23./;
+                               WORD/.24..31./;
+
+                               WORDLIST;
+		"`WORD`"            = ;WORD/.0..7./;
+                               WORD/.8..15./;
+                               WORD/.16..23./;
+                               WORD/.24..31./;
+	}
+	
+
+	HALFLIST {
+		"`HALF`,`HALFLIST`" = ;HALF/.0..7./;
+                               HALF/.8..15./;
+                               HALFLIST;
+
+		"`HALF`"            = ;HALF/.0..7./;
+                               HALF/.8..15./;
+	}
+	
+
+	BYTELIST {
+		"`BYTE`,`BYTELIST`" = ;BYTE;
+                               BYTELIST;
+
+		"`BYTE`"            = ;BYTE;
+	}
+}
+
+
+
+instructions {
+
+//////////////////////////////////////////////////////////////////////////
+//
+//  ALU-naredbe:
+//
+//  op.kod    adr=0     dest     src1    src2    ---
+//   31-27    26        25-23    22-20   19-17   16-0
+//
+//
+//  op.kod    adr=1     dest     src1    20-bitni podatak
+//   31-27    26        25-23    22-20   19-0
+//
+//////////////////////////////////////////////////////////////////////////
+
+    "`ALU_instr` `src1`,`alu_src2`,`dest`"
+        =	;alu_src2[3];
+			alu_src2[2];
+			dest[1], src1, alu_src2[1];
+			ALU_instr, alu_src2[0], dest[0];
+
+
+    "CMP `src1`,`alu_src2`"
+        =	;alu_src2[3];
+			alu_src2[2];
+			0, src1, alu_src2[1];
+			01101, alu_src2[0], 00;
+
+
+
+    "MOVE `move_src`,`move_dest`"
+		=	;move_src[4];
+			move_src[3];
+			move_dest[1], 0, move_src[1], move_dest[2], move_src[2];
+			00000, move_src[0], move_dest[0];
+
+
+
+	"`MEM_instr` `dest`,(`reg_offset`)"
+		=	;reg_offset[2];
+			reg_offset[1];
+			dest[1], reg_offset[0];
+			MEM_instr, 1, dest[0];
+
+
+	"`MEM_instr` `dest`,(`address_20`)"
+		=	;address_20[2];
+			address_20[1];
+			dest[1], 000, address_20[0];
+			MEM_instr, 0, dest[0];
+
+
+    "`STACK_instr` `dest`"
+		=	;0000,0000;
+			0000,0000;
+			dest[1], 000,0000;
+			STACK_instr, 0, dest[0];
+
+
+
+    "`CTRL_instr``cc` `address_20`"
+		=	;address_20[2];
+			address_20[1];
+			cc[1], 00, address_20[0];
+			CTRL_instr, 1, cc[0];
+
+
+    "`CTRL_instr``cc` (`src1`)"
+		=	;0000,0000;
+			0000,0000;
+			cc[1], 00, src1, 0;
+			CTRL_instr, 0, cc[0];
+
+
+    "RET`cc`"
+		=	;0000,00,00;
+			0000,0000;
+			cc[1], 00,0000;
+			11011, 0, cc[0];
+
+    "RETI`cc`"
+		=	;0000,00,01;
+			0000,0000;
+			cc[1], 00,0000;
+			11011, 0, cc[0];
+
+    "RETN`cc`"
+		=	;0000,00,11;
+			0000,0000;
+			cc[1], 00,0000;
+			11011, 0, cc[0];
+
+
+    "JR`cc` `unsigned_32`"
+		=	;/.19./(unsigned_32-PC-4)/.0..7./;
+			/.19./(unsigned_32-PC-4)/.8..15./;
+			cc[1], 00, /.19./(unsigned_32-PC-4)/.16..19./;
+			11010, 1, cc[0];
+
+//    "JR`cc` .+`poff18`"  = ;11010, 1, cc, 00, /.19./(poff18-1)/.0..18./  , 10;
+//    "JR`cc` .-`poff18`"  = ;11010, 1, cc, 00, /.19./(0-poff18-1)/.0..18./, 10;
+
+
+
+
+    "HALT`cc`"
+		=	;0000,0000;
+			0000,0000;
+			cc[1], 00,0000;
+			11111, 0, cc[0];
+
+
+
+    "DW `WORDLIST`" = ;WORDLIST;
+    "DH `HALFLIST`" = ;HALFLIST;
+    "DB `BYTELIST`" = ;BYTELIST;
+}
+

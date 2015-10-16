@@ -16,8 +16,10 @@ class Editor( Gtk.ScrolledWindow ):
     last_change = None
     suspend_change = False
 
-    def __init__( self, config ):
+    def __init__( self, parent, config ):
         Gtk.ScrolledWindow.__init__( self )
+
+        self.parent = parent
 
         self.set_hexpand( True )
         self.set_vexpand( True )
@@ -179,6 +181,8 @@ class Editor( Gtk.ScrolledWindow ):
     # Events
     def on_change( self, buffer ):
         if self.suspend_change: return
+
+        self.parent.on_editor_contents_changed()
 
         if self.last_change[ 'type' ] == 'insert':
             self.last_change[ 'end' ] = self.encode_iter( self.editor_buffer.get_iter_at_mark(

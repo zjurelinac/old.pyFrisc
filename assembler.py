@@ -1,5 +1,6 @@
 from itertools import chain
 from math import ceil, log
+from utils import *
 
 import os.path
 import re
@@ -9,14 +10,18 @@ import yaml
 data = dict()
 labels = dict()
 memory = []
+maxnum = 0
 
+# Helper
 def show_error( s ):
     return s, False
 
+# Helper
 def round_to_word( i ):
     return int( int( i/data[ 'consts' ][ 'words_per_line' ] + 1 ) * data[ 'consts' ][ 'words_per_line' ]
         if i%data[ 'consts' ][ 'words_per_line' ] != 0 else i )
 
+# Helper?
 def args_len( args ):
     n = 0
     while args:
@@ -24,28 +29,13 @@ def args_len( args ):
         n += 1
     return n
 
+# Procedure
 def place_in_mem( res, n ):
     for i in range( 0, data[ 'consts' ][ 'words_per_line' ] ):
         memory[ n ] = res[ data[ 'consts' ][ 'word_size' ]*i : data[ 'consts' ][ 'word_size' ]*(i+1) ]
         n += 1
 
-def compl2( x, w ):
-    return ( '{:0>' + str( w ) + 'b}' ).format( 2**w - int( x, 2 ) )
-
-# TODO
-def extend20( x ):
-    if abs( x ) > 2**32:
-        raise ValueError( 'Number larger than 32 bits.' )
-    y = '{:0>32b}'.format( abs( x ) )
-    if x < 0:
-        x = compl2( y, 32 )
-
-    p = y.find( '1' if y[ 0 ] == '0' else '0' )
-    if p > -1 and p <= 12:
-        raise ValueError( 'Number too large to fit into 20 bits.' )
-    else:
-        return y[ 12: ]
-
+# Helper
 def to_little_endian( x, n ):
     i = 0
     arr = []
@@ -53,20 +43,7 @@ def to_little_endian( x, n ):
         arr.append( x[ data[ 'consts' ][ 'word_size' ]*i : data[ 'consts' ][ 'word_size' ]*(i+1) ] )
     return ''.join( reversed( arr ) )
 
-def fits_into( x, b ):
-    return x == 0 or int( log( x, 2 ) ) < b
-
-def bin_to_hex( x ):
-    return ( '{:0>' + str( len( x ) // 4 ) + 'X}' ).format( int( x, 2 ) )
-
-def bin_to_pretty_hex( x ):
-    a = bin_to_hex( x )
-    s = ''
-    for i in range( 0, len( a ), 2 ):
-        s += a[ i:i+2 ] + ' '
-    return s[ : -1 ]
-
-# TODO check if constant too large for 32 bits
+# Function, helper
 def parse_constant( args, leftovers = True ):
     if not args:
         raise ValueError( 'Nothing to parse.' )
@@ -77,6 +54,10 @@ def parse_constant( args, leftovers = True ):
     elif args[ 0 ][ 0 ].isdigit():
         r = int( args[ 0 ], data[ 'consts' ][ 'default_base' ] )
         a = args[ 1: ] if len( args ) > 1 else []
+
+    elif args[ 0 ][ 0 ] == '-':
+        r = -int( args[ 1 ] , data[ 'consts' ][ 'default_base' ] )
+        a = args[ 2: ] if len( args ) > 2 else []
 
     elif args[ 0 ] in labels:
         r = labels[ args[ 0 ] ]
@@ -94,9 +75,11 @@ def parse_constant( args, leftovers = True ):
     else:
         return [ r, a ]
 
+# Function, helper
 def parse_reg( arg ):
     return data[ 'codes' ][ 'REG' ][ arg ]
 
+# Function, helper
 def parse_src2( args ):
     try:
         res = parse_reg( args[ 0 ] ), args[ 1: ]
@@ -105,6 +88,7 @@ def parse_src2( args ):
         res[ 0 ] = extend20( res[ 0 ] )
     return res
 
+# Function
 def parse_aluop( cmd, args ):
     src1 = parse_reg( args[ 0 ] )
     src2, args = parse_src2( args[ 1: ] )
@@ -113,6 +97,7 @@ def parse_aluop( cmd, args ):
         + dest + src1 + src2 + ( '0'*17 if len( src2 ) != 20 else '' ), data[ 'consts' ][ 'words_per_line' ] )
     return result
 
+# Function
 def parse_memop( cmd, args ):
     reg = parse_reg( args[ 0 ] )
     result = data[ 'codes' ][ 'MEM' ][ cmd ]
@@ -146,11 +131,13 @@ def parse_memop( cmd, args ):
     result = to_little_endian( result, data[ 'consts' ][ 'words_per_line' ] )
     return result
 
+# Function
 def parse_stackop( cmd, args ):
     dest = parse_reg( args[ 0 ] )
     result = to_little_endian( data[ 'codes' ][ 'STACK' ][ cmd ] + '0' + dest + '0'*23, data[ 'consts' ][ 'words_per_line' ] )
     return result
 
+# Function
 def parse_ctrlop( cmd, args ):
     if args[ 0 ] == '_':
         flag = args[ 1 ]
@@ -168,12 +155,14 @@ def parse_ctrlop( cmd, args ):
         + '00' + loc, data[ 'consts' ][ 'words_per_line' ] )
     return result
 
+# Function
 def parse_retop( cmd, args ):
     flag = args[ 1 ] if args and args[ 0 ] == '_' else '$'
     result = to_little_endian( data[ 'codes' ][ 'RET' ][ cmd ] + '0' + data[ 'codes' ][ 'COND' ][ flag ]
         + 20*'0' + data[ 'codes' ][ 'RET_CODE' ][ cmd ], data[ 'consts' ][ 'words_per_line' ] )
     return result
 
+# Function
 def parse_moveop( cmd, args ):
     a = '0'
     src = '000'
@@ -202,17 +191,20 @@ def parse_moveop( cmd, args ):
 
     return result
 
+# Function
 def parse_jr( cmd, args, n ):
     if args[ 0 ] == '_':
         flag = args[ 1 ]
         args = args[ 2: ] if len( args ) > 2 else []
     else: flag = '$'
 
+    # TODO: Beware, if label, that's ok, if a bare number, NOT OK, won't jump N places forward but to address N
     offset = parse_constant( args, False )
     result = to_little_endian( data[ 'codes' ][ 'JR' ] + '1' + data[ 'codes' ][ 'COND' ][ flag ] + '00'
         + extend20( offset - n - 4 ), data[ 'consts' ][ 'words_per_line' ] )
     return result
 
+# Function
 def parse_cmp( cmd, args ):
     src1 = parse_reg( args[ 0 ] )
     src2, args = parse_src2( args[ 1: ] )
@@ -220,6 +212,7 @@ def parse_cmp( cmd, args ):
         + '000' + src1 + src2 + ( '0'*17 if len( src2 ) != 20 else '' ), data[ 'consts' ][ 'words_per_line' ] )
     return result
 
+# Function
 def define_data( cmd, args, n ):
     size = data[ 'consts' ][ 'define_data' ][ cmd ]*data[ 'consts' ][ 'word_size' ]
     p = []
@@ -237,18 +230,20 @@ def define_data( cmd, args, n ):
 
     return p
 
+# Function
 def define_space( cmd, args, n ):
     len = parse_constant( args, False )
     for i in range( 0, len ):
         memory[ n+i ] = '0'*data[ 'consts' ][ 'word_size' ]
     return [ '0'*data[ 'consts' ][ 'line_size' ] ]* ceil( len/data[ 'consts' ][ 'words_per_line' ] )
 
+# Function
 def parse_lines( ls ):
     lines = []
     num = 0
     for l in ls:
         res = { 'original' : l }
-        sl = l.split( ';', maxsplit = 1 )[ 0 ]
+        sl = l.upper().split( ';', maxsplit = 1 )[ 0 ]
         if sl:
             res[ 'blank' ] = False
             if sl[ 0 ].isspace(): lab = ''
@@ -302,8 +297,12 @@ def parse_lines( ls ):
     if num >= data[ 'consts' ][ 'max_memory' ]:
         raise ValueError( 'Too much memory used' )
 
+    global maxnum
+    maxnum = num
+
     return lines
 
+# Main function
 def assemble( f ):
     """ Assembles the contents of a file f
 
@@ -314,7 +313,7 @@ def assemble( f ):
             1. readable file containing the machine code together with it's source
             2. binary file containing only the machine code
     """
-    global data, memory
+    global data, memory, maxnum
     data = yaml.load( open( 'config/definitions/frisc.lang.yaml', 'r' ).read() )
     memory = [ '00000000' ] * data[ 'consts' ][ 'max_memory' ]
 
@@ -367,8 +366,7 @@ def assemble( f ):
                     p[ 'parsed' ] = define_data( p[ 'cmd' ], p[ 'args' ], p[ 'num' ] )
                     multiple = True
                 elif p[ 'cmd' ] == data[ 'consts' ][ 'define_space' ]:
-                    p[ 'parsed' ] = define_space( p[ 'cmd' ], p[ 'args' ], p[ 'num' ] )
-                    multiple = True
+                    p[ 'blank' ] = True
                 else:
                     print( p )
                     raise ValueError( 'Unknown command' )
@@ -399,4 +397,4 @@ def assemble( f ):
     return 'Source successfully assembled.', True
 
 if __name__ == "__main__":
-    assemble( sys.argv[ 1 ] )
+    print( assemble( sys.argv[ 1 ] ) )

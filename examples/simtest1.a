@@ -1,0 +1,12 @@
+    ORG 0
+    MOVE -1, R0
+    STORE R0, (40)
+    STOREH R0, (44)
+    LOADH R1, (44)
+    MOVE 7, R2
+    STOREB R2, (48)
+
+    HALT
+
+    ORG 40
+    DW 1, 2, 3, 4, 5

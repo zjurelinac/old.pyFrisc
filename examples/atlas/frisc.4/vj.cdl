@@ -1,0 +1,29 @@
+registers {
+    brojac/.32./;
+}
+
+
+pins {
+	DATA/.32./, ADR/.32./, READ;
+}
+
+init {
+	disable DATA, ADR, READ;
+	let brojac=1;
+}
+
+run {
+	forever{
+		wait ( fall (READ) );
+
+		if (ADR=%H FFFFFFFC ) {
+			let DATA=brojac;
+			inc( brojac, brojac);
+		}
+
+		wait( rise (READ) );
+
+        delay 1 bc;
+		disable DATA;
+	}	
+}

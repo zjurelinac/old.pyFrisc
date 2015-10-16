@@ -6,8 +6,10 @@ class Console( Gtk.ScrolledWindow ):
     view = Gtk.TextView()
     tags = {}
 
-    def __init__( self, config ):
+    def __init__( self, parent, config ):
         Gtk.ScrolledWindow.__init__( self )
+
+        self.parent = parent
 
         self.view.set_buffer( self.buffer )
         self.set_name( 'console-wrapper' )

@@ -39,6 +39,7 @@
     padding         :   10px 15px;
 }
 
+/* Editor styles */
 #editor-grid{
     background      :   @text_bg;
 }
@@ -68,6 +69,75 @@
     padding         :   0 10px 0 10px;
 }
 
+/* Simulator styles */
+#simulator-grid{
+    background      :   @text_bg;
+    color           :   #fff;
+    padding         :   10px;
+}
+
+
+/* Memory display styles */
+#memory-view{
+    background      :    #3a3a3a;
+    font-family     :    "Ubuntu Mono", Consolas, monospace;
+    font-size       :    12px;
+}
+
+#memory-view row{
+    border-bottom   :   1px solid @text_bg;
+    color           :   @text_fg;
+}
+
+#memory-view row:selected{
+    background      :   @red0;
+    border-top      :   none;
+    box-shadow      :   none;
+}
+
+#mem-address{
+}
+
+GtkTreeViewColumn header{
+    background : red;
+}
+
+/* Register grid styles */
+#register-grid{
+
+}
+
+#register-box{
+    margin          :   5px 0;
+}
+
+#register-name{
+    background      :   #555;
+    font-family     :   "Ubuntu Mono", "Consolas", monospace;
+    font-size       :   12px;
+    font-weight     :   bold;
+    padding         :   5px 10px;
+}
+
+#register-value{
+    background      :   #3a3a3a;
+    font-family     :   "Ubuntu Mono", "Consolas", monospace;
+    font-size       :   12px;
+    padding         :   5px 20px;
+}
+
+#pc-box #register-name{
+    background      :   @red0;
+}
+
+
+
+#goto-label{
+    padding-right   :   10px;
+}
+
+
+/* Console styles */
 #console-wrapper{
     background      :   @text_bg;
 }
@@ -84,6 +154,8 @@
     color           :   #fff;
 }
 
+
+/* Main menu styles */
 #main-menu{
     border          :   none;
     /*box-shadow      :   none;*/
@@ -108,6 +180,8 @@
     color           :   #fff;
 }
 
+
+/* About dialog styles */
 #about-dialog{
 }
 

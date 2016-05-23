@@ -87,11 +87,10 @@ class FRISCProcessor:
 
         if opcode == '00000':       # MOVE
             if rs1 == '000':
-                value = imm if func == '1' else self.registers[ rs2 ]
+                value = (imm if func == '1' else self.registers[ rs2 ])
             else:
-                if rs1[ 1 ] == '1': rd = 'SR'
-                if rs2[ 1 ] == '1': value = self.registers[ 'SR' ]
-
+                if rs1[ 2 ] == '1': rd = 'SR'
+                value = self.registers[ 'SR' if rs1[1] == '1' else rs2 ]
             self.registers[ rd ] = value
 
         elif opcode[ 0 ] == '0':    # ALU

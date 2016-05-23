@@ -1,7 +1,2 @@
-<<<<<<< HEAD
-{file_exists: true, file_name: /home/iota/Programming/Python/pyFrisc/examples/load_test.a,
-  max_undos: 100, tab_index: 0}
-=======
-{file_exists: true, file_name: /home/sigma/Programming/Python/pyFrisc/examples/vector_adder.a,
-  max_undos: 100, tab_index: 1}
->>>>>>> e1a402a8d35a26447d84a24c8e64c60cbebba373
+{file_exists: true, file_name: /home/iota/Programming/Python/pyFrisc/frisc_os.a, max_undos: 100,
+  tab_index: 1}

@@ -214,6 +214,8 @@ def parse_cmp( cmd, args ):
 
 # Function
 def define_data( cmd, args, n ):
+    if len(args) < 1:
+        raise ValueError('Incorrect command format.')
     size = data[ 'consts' ][ 'define_data' ][ cmd ]*data[ 'consts' ][ 'word_size' ]
     p = []
     while args:
@@ -329,7 +331,7 @@ def assemble( f ):
     base = path.rsplit( '.', maxsplit = 1 )[ 0 ]
 
     pfile = open( base + '.p', 'w' )
-    efile = open( base + '.e', 'wb' )
+    # efile = open( base + '.e', 'wb' )
 
     j = 1
     for p in pls:
@@ -392,7 +394,7 @@ def assemble( f ):
         j += 1
 
     pfile.close()
-    efile.close()
+    # efile.close()
 
     return 'Source successfully assembled.', True
 

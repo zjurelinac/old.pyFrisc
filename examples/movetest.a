@@ -1,0 +1,3 @@
+	MOVE 10, R0
+	MOVE R0, SR
+	HALT

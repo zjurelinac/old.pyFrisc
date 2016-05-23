@@ -1,0 +1,228 @@
+;###############################################################################
+;#	FRISC OS v0.1
+;#	--------------------------------------------------------------------------	
+;#	Author:			Zvonimir Jurelinac
+;#	Description:	A basic bootloader and operating system for FRISC
+;#					processing system implemented on Zynq ZedBoard.
+;# 					 
+;#	TODO: 			¤ Allow callback priorities
+;#					¤ Rethink callbacks, perhaps useless
+;#					¤ RESET handler
+;# 					¤ UART handlers
+;#
+;#	Code sections:
+;#	--------------------------------------------------------------------------
+;#	1. CONSTANTS DEFINITION
+;#	2. DEFAULT START SEQUENCE
+;#	3. NON-MASKING INTERRUPT HANDLER
+;#	4. MASKING INTERRUPT HANDLER
+;#	5. OPERATING SYSTEM MAIN FUNCTION
+;#	6. SYSTEM CALLS DEFINITION
+;#	7. AUXILLIARY FUNCTIONS
+;#	8. OS MEMORY SPACE
+;###############################################################################
+
+;===============================================================================
+; 	1. CONSTANTS DEFINITION
+;===============================================================================
+
+;----- IMPORTANT OS MEMORY LOCATIONS -------------------------------------------
+; NMI_CB_DEF_CNT_ADDR 		Address of NMI callback def. counter - how many callbacks already defined
+; NMI_CB_DEF_START_ADDR 	Starting address for NMI callback definitions
+; INT_CB_DEF_CNT_ADDR 		Address of INT callback def. counter - how many callbacks already defined
+; INT_CB_DEF_START_ADDR 	Starting address for INT callback definitions
+
+;----- VARIOUS DEFINITIONS -----------------------------------------------------
+IO_CB_DEF_SIZE 			EQU 16 		; 	Single IO callback definition size
+									; 	IO callback definition contains:
+									; 		IO_UNIT_SR_ADDR - IO unit's status register address
+									; 		IO_UNIT_SR_MASK - Status register interrupt AND mask
+									; 		IO_UNIT_CB_ADDR - Starting address of callback procedure
+IO_CB_DEF_SIZE_LG 		EQU 4 		; 	Log2(IO_CB_DEF_SIZE)
+
+;----- IO UNITS LOCATIONS ------------------------------------------------------
+
+; LogiCORE IP AXI UART LITE
+;  	BASEADDR = 0x00002000
+IO_UART_READ_REG 		EQU 00002000
+IO_UART_WRITE_REG 		EQU 00002004
+IO_UART_STAT_REG 		EQU 00002008
+IO_UART_CTRL_REG 		EQU 0000200C
+
+
+;===============================================================================
+; 	2. DEFAULT START SEQUENCE
+;===============================================================================
+				ORG 0
+_OS_START		MOVE 4000, SP
+				JP _OS_INIT
+
+				ORG 8
+				DW 100
+
+
+;===============================================================================
+; 	3. NON-MASKING INTERRUPT HANDLER
+;===============================================================================
+				
+_NMI_HANDLER	ORG 0C
+				RETN
+
+
+;===============================================================================
+; 	4. MASKING INTERRUPT HANDLER
+;===============================================================================
+
+_INT_HANDLER 	ORG 100
+;############################################################################### 	
+;# 	Masking interrupts handler - detects which unit caused the interrupt and 
+;# 	calls the corresponding callback
+;# 	 ::  	Nothing
+;# 	 =>  	Nothing
+;# 			
+;#			R0 - IO_UNIT_SR_ADDR, IO_UNIT_SR_VALUE
+;# 			R1 - IO_UNIT_SR_MASK
+;# 			R2 - IO_UNIT_CB_ADDR
+;# 			R3 - IO CB address pointer
+;# 			R4 - Callbacks counter
+;###############################################################################
+				PUSH R0
+				MOVE SR, R0
+				PUSH R0
+				PUSH R1
+				PUSH R2
+				PUSH R3
+				PUSH R4
+				
+_START_1		MOVE INT_CB_DEF_START_ADDR, R3
+				LOAD R4, (INT_CB_DEF_CNT_ADDR)
+				CMP R4, 0
+				JP_Z _ENDLOOP_1
+
+_LOOP_1			LOAD R0, (R3)
+				LOAD R1, (R3+4)
+				LOAD R2, (R3+8)
+
+				LOAD R0, (R0)
+				AND R0, R1, R0
+				JP_Z _LOOP_1_CONT 	; IO unit inactive
+				CALL (R2)
+
+_LOOP_1_CONT	ADD R3, IO_CB_DEF_SIZE, R3
+				SUB R4, 1, R4
+				JP_NZ _LOOP_1
+_ENDLOOP_1		
+				POP R4
+				POP R3
+				POP R2
+				POP R1
+				POP R0
+				MOVE R0, SR
+				POP R0
+				RETI
+
+
+;===============================================================================
+; 	5. OPERATING SYSTEM MAIN FUNCTION
+;===============================================================================
+				ORG 200
+				CALL _INT_HANDLER
+
+_OS_INIT		; Handler setup testing
+				MOVE 2008, R0
+				MOVE 1, R1
+				MOVE 1000, R2
+				CALL REG_INT_CB
+
+				MOVE 3008, R0
+				MOVE 1, R1
+				MOVE 1050, R2
+				CALL REG_INT_CB
+
+				; Handler call testing
+				MOVE 7, R1
+				STORE R1, (2008)
+				CALL _INT_HANDLER
+				
+_OS_LOOP		HALT
+
+
+;===============================================================================
+; 	6. SYSTEM CALLS DEFINITION
+;===============================================================================
+
+REG_NMI_CB 		ORG 300
+;###############################################################################
+;# 	Register a handler for IO interrupt unit (non-masking interrupts)
+;#
+;#   :: 	IO_UNIT_SR_ADDR (R0) 	- IO unit's status register address
+;# 			IO_UNIT_SR_MASK (R1) 	- Status register interrupt AND mask
+;# 			IO_UNIT_CB_ADDR (R2) 	- Starting callback address
+;# 	 => 	Nothing
+;# 	
+;# 			R3 - address pointers
+;###############################################################################
+				PUSH R3
+				LOAD R3, (NMI_CB_DEF_CNT_ADDR)
+				SHL R3, IO_CB_DEF_SIZE_LG, R3 		; R3 := offset from start address
+				ADD R3, NMI_CB_DEF_START_ADDR, R3
+				STORE R0, (R3)
+				STORE R1, (R3+4)
+				STORE R2, (R3+8)
+				LOAD R3, (NMI_CB_DEF_CNT_ADDR)
+				ADD R3, 1, R3
+				STORE R3, (NMI_CB_DEF_CNT_ADDR)
+				POP R3
+				RET
+
+
+REG_INT_CB 		ORG 400
+;###############################################################################
+;# 	Register a handler for IO interrupt unit (masking interrupts)
+;#
+;#   :: 	IO_UNIT_SR_ADDR (R0) 	- IO unit's status register address
+;# 			IO_UNIT_SR_MASK (R1) 	- Status register interrupt AND mask
+;# 			IO_UNIT_CB_ADDR (R2) 	- Starting callback address
+;# 	 => 	Nothing
+;# 	
+;# 			R3 - address pointers
+;###############################################################################
+				PUSH R3
+				LOAD R3, (INT_CB_DEF_CNT_ADDR)
+				SHL R3, IO_CB_DEF_SIZE_LG, R3 		; R3 := offset from start address
+				ADD R3, INT_CB_DEF_START_ADDR, R3
+				STORE R0, (R3)
+				STORE R1, (R3+4)
+				STORE R2, (R3+8)
+				LOAD R3, (INT_CB_DEF_CNT_ADDR)
+				ADD R3, 1, R3
+				STORE R3, (INT_CB_DEF_CNT_ADDR)
+				POP R3
+				RET
+
+;===============================================================================
+; 	7. AUXILLIARY FUNCTIONS
+;===============================================================================
+
+;===============================================================================
+; 	8. OS MEMORY SPACE
+;===============================================================================
+						ORG 500
+NMI_CB_DEF_CNT_ADDR 	DW 0
+NMI_CB_DEF_START_ADDR 	DS 400
+
+INT_CB_DEF_CNT_ADDR 	DW 0
+INT_CB_DEF_START_ADDR 	DS 400
+
+
+;===============================================================================
+; 	9. User space programs
+;===============================================================================
+	
+TEST_CB_1 		ORG 1000
+				MOVE 1234, R6
+				RET
+
+TEST_CB_1 		ORG 1050
+				MOVE 5678, R6
+				RET

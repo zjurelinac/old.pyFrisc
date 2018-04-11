@@ -1,5 +1,7 @@
 ####################################################################################################
-#                   FRISC assembly language specification version 1.0                              #
+#                   FRISC assembly language specification version 3.0                              #
+#   Changelog:
+#       - 13.03.2018. - swapped ULT and UGE condition codes (change in FRISC arch)
 ####################################################################################################
 
 consts:
@@ -91,8 +93,8 @@ codes:
         SLE:    '1100'
         SGE:    '1101'
         SGT:    '1110'
-        ULT:    '0011'
-        UGE:    '0100'
+        ULT:    '0100'
+        UGE:    '0011'
         $ :     '0000'
 
     RET_CODE:

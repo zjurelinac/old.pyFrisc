@@ -61,8 +61,9 @@ class FRISCProcessor:
         try:
             while( not self.flags[ 'TERM' ] ):
                 self.run_step()
-                self.show_registers()
-            self.show_memory()
+                # self.show_registers()
+            self.show_registers()
+            # self.show_memory()
         except Exception as e:
             print( str( e ) )
 
